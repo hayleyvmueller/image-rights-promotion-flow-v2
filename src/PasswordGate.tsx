@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Button, TextInput } from '@rdc-npm/rdc-ui-v4'
 
-const GATE_PASSWORD = 'E2E'
+const GATE_PASSWORD = 'RDC27'
 
 // Remembered so that "View on Realtor.com" — which opens a real second tab — does
 // not stop at this gate again. Note this makes the gate a once-per-browser prompt.
