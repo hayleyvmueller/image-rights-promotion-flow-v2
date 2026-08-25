@@ -3,31 +3,14 @@ import { Button, TextInput } from '@rdc-npm/rdc-ui-v4'
 
 const GATE_PASSWORD = 'RDC27'
 
-// Remembered so that "View on Realtor.com" — which opens a real second tab — does
-// not stop at this gate again. Note this makes the gate a once-per-browser prompt.
-const UNLOCKED_KEY = 'ir-prototype-unlocked'
-
-const readUnlocked = () => {
-  try {
-    return window.localStorage.getItem(UNLOCKED_KEY) === 'true'
-  } catch {
-    return false
-  }
-}
-
 export default function PasswordGate({ children }: { children: ReactNode }) {
-  const [unlocked, setUnlocked] = useState(readUnlocked)
+  const [unlocked, setUnlocked] = useState(false)
   const [value, setValue] = useState('')
   const [error, setError] = useState(false)
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
     if (value === GATE_PASSWORD) {
-      try {
-        window.localStorage.setItem(UNLOCKED_KEY, 'true')
-      } catch {
-        // Storage blocked — the gate simply asks again in the next tab.
-      }
       setUnlocked(true)
     } else {
       setError(true)
