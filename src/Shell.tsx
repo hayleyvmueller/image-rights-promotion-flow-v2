@@ -17,10 +17,12 @@ import {
   Toggle,
   Checkbox,
   InlineMessage,
-  Menu,
-  ListBox,
   Avatar,
   EmptyPlaceholder,
+  Tooltip,
+  ProgressBar,
+  Chip,
+  TextInput,
 } from '@rdc-npm/rdc-ui-v4'
 import {
   IconHome,
@@ -35,15 +37,10 @@ import {
   IconRealAssist,
   IconMagicWand,
   IconUpload,
-  IconMoreFilled,
-  IconEdit,
   IconDelete,
   IconCalendar,
   IconBarChart,
   IconOpen,
-  IconGridView,
-  IconBuildingOverview,
-  IconAgent,
   IconArrowLeft,
   IconCamera,
   IconChevronDown,
@@ -61,12 +58,49 @@ import {
   IconArrowRight,
   IconCircleQuestion,
   IconLightbulb,
+  IconChevronLeft,
+  IconChevronRight,
+  IconHeart,
+  IconShare,
+  IconHomeSlash,
+  IconPauseFilled,
+  IconSquareFootage,
+  IconGarage,
+  IconHoa,
+  IconHammer,
+  IconCar,
+  IconEdit,
   LogoRealtorProDefault,
   LogoBrandWhite,
   LogoBrand,
 } from '@rdc-npm/rdc-ui-v4/illustrations'
 import { css } from 'styled-system/css'
 import { hstack, vstack } from 'styled-system/patterns'
+// Imported as an asset rather than served from public/ so the standalone
+// single-file build can inline it as a data URI.
+import AUTHORIZATION_RELEASE_PDF_URL from './assets/Authorization-and-Release.pdf?url'
+// The generated walkthrough that opens the buyer's hero carousel.
+import WALKTHROUGH_VIDEO_URL from './assets/walkthrough.mp4?url'
+// The listing's own photo set — same reason these are imported instead of
+// served from public/: the standalone build only inlines what the bundler sees.
+import PHOTO_EXTERIOR_FRONT from './Images/exterior-front.png'
+import PHOTO_FRONT_PORCH from './Images/front-porch.png'
+import PHOTO_LIVING_ROOM from './Images/living-room.png'
+import PHOTO_KITCHEN from './Images/kitchen.png'
+import PHOTO_DINING_ROOM from './Images/dining-room.png'
+import PHOTO_PRIMARY_BEDROOM from './Images/primary-bedroom.png'
+import PHOTO_PRIMARY_BATHROOM from './Images/primary-bathroom.png'
+import PHOTO_OFFICE from './Images/office.png'
+import PHOTO_SECONDARY_BATHROOM from './Images/secondary-bathroom.png'
+import PHOTO_BACKYARD from './Images/backyard.png'
+import PHOTO_AERIAL from './Images/aerial.png'
+// AI re-renders of the living room above, one per renovation style.
+import RENDER_TRADITIONAL from './Image Renovated/Traditional.png'
+import RENDER_CONTEMPORARY from './Image Renovated/Contemporary.png'
+import RENDER_MODERN from './Image Renovated/Modern.png'
+import RENDER_SCANDI from './Image Renovated/Scandi.png'
+import RENDER_INDUSTRIAL from './Image Renovated/Industrial.png'
+import RENDER_FARMHOUSE from './Image Renovated/Farmhouse.png'
 
 // ─── Sample data ──────────────────────────────────────────────────────────────
 
@@ -90,6 +124,8 @@ interface Listing {
   promotionStatus: string
   promoted?: boolean
   mediaEnhanced?: boolean
+  /** How many times the agent has regenerated enhanced media for this listing. */
+  regenerationsUsed?: number
   uploadedPhotos: string[]
   buyers: string
 }
@@ -289,6 +325,12 @@ const PERFORMANCE_COLOR: Record<Performance, 'greenSubtle' | 'redSubtle' | 'gray
 const SEGMENTS = ['For sale', 'For rent', 'Sold', 'ListHub']
 
 const AVAILABLE_PROMOTIONS = 18
+
+/** Agents get a fixed number of enhanced-media regenerations per listing. */
+const MAX_REGENERATIONS = 3
+
+const regenerationsLeft = (listing: Listing) =>
+  Math.max(0, MAX_REGENERATIONS - (listing.regenerationsUsed ?? 0))
 
 function formatListedDate(mmddyy: string): string {
   const [mm, dd, yy] = mmddyy.split('/').map(Number)
@@ -1147,11 +1189,17 @@ function ListingDetailScreen({
   onBack,
   onPromote,
   onEnhance,
+  viewOnRealtorHref,
+  onViewOnRealtor,
 }: {
   listing: Listing
   onBack: () => void
   onPromote: (listing: Listing) => void
   onEnhance: (listing: Listing) => void
+  /** Deep link the buyer's view opens at, in its own tab. */
+  viewOnRealtorHref: string
+  /** Fires just before that tab opens, to hand it the current listing data. */
+  onViewOnRealtor: (listing: Listing) => void
 }) {
   const BreadcrumbLink = (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
     <BackToListingsLink onBack={onBack} {...props} />
@@ -1251,7 +1299,17 @@ function ListingDetailScreen({
                   {listing.agent}
                 </Link>
               </div>
-              <Link href="#" underline="default" size="lg" endIcon={<IconOpen size={2} />}>
+              <Link
+                href={viewOnRealtorHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                underline="default"
+                size="lg"
+                endIcon={<IconOpen size={2} />}
+                // Runs before the browser follows the link, so the new tab finds
+                // the up-to-date listing data waiting for it.
+                onClick={() => onViewOnRealtor(listing)}
+              >
                 View on Realtor.com
               </Link>
             </div>
@@ -1339,9 +1397,22 @@ function ListingDetailScreen({
                           />
                         ))}
                       </div>
-                      <Button styleType="Tertiary" size="sm" onClick={() => onEnhance(listing)}>
-                        Edit photos
-                      </Button>
+                      {regenerationsLeft(listing) === 0 ? (
+                        <Tooltip
+                          placement="bottom"
+                          body="You have reached the max amount of regenerations."
+                        >
+                          {/* Haven marks disabled buttons with aria-disabled rather than the
+                              native attribute, so hover and focus still reach the trigger. */}
+                          <Button styleType="Tertiary" size="sm" disabled>
+                            Edit photos
+                          </Button>
+                        </Tooltip>
+                      ) : (
+                        <Button styleType="Tertiary" size="sm" onClick={() => onEnhance(listing)}>
+                          Edit photos
+                        </Button>
+                      )}
                     </div>
                     <span className={css({ textStyle: 'caption', color: 'text.alternate' })}>
                       Showing {Math.min(4, listing.uploadedPhotos.length)} of{' '}
@@ -1516,36 +1587,25 @@ function PhotoThumbnail({
         draggable={false}
         className={css({ position: 'absolute', bottom: '200', right: '200' })}
       >
-        <Menu width={180} placement="bottom-end" disableAutoFlip portalRoot={document.body}>
-          <Menu.Toggle>
-            <button
-              type="button"
-              aria-label="Photo options"
-              className={css({
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                w: '32px',
-                h: '32px',
-                borderRadius: '500',
-                bg: 'bg.inverse',
-                color: 'text.inverse',
-                cursor: 'pointer',
-                _hoverSupported: { bg: 'bg.inverse.alternate' },
-              })}
-            >
-              <IconMoreFilled size={2} />
-            </button>
-          </Menu.Toggle>
-          <Menu.List>
-            <ListBox.Item value="edit" startAddon={<IconEdit size={2} />}>
-              Edit photo
-            </ListBox.Item>
-            <ListBox.Item value="delete" startAddon={<IconDelete size={2} />} onClick={onDelete}>
-              Delete photo
-            </ListBox.Item>
-          </Menu.List>
-        </Menu>
+        <button
+          type="button"
+          aria-label="Delete photo"
+          onClick={onDelete}
+          className={css({
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            w: '32px',
+            h: '32px',
+            borderRadius: 'circle',
+            bg: 'bg.inverse',
+            color: 'text.inverse',
+            cursor: 'pointer',
+            _hoverSupported: { bg: 'bg.inverse.alternate' },
+          })}
+        >
+          <IconDelete size={2} />
+        </button>
       </div>
     </div>
   )
@@ -1553,15 +1613,19 @@ function PhotoThumbnail({
 
 // ─── Photo upload screen ─────────────────────────────────────────────────────────
 
+/** Ordered the way an agent would actually upload a shoot: outside in. */
 const SAMPLE_HOUSE_PHOTOS = [
-  'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400&h=267&fit=crop',
-  'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=267&fit=crop',
-  'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=267&fit=crop',
-  'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=267&fit=crop',
-  'https://images.unsplash.com/photo-1600585152220-90363fe7e115?w=400&h=267&fit=crop',
-  'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=400&h=267&fit=crop',
-  'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=400&h=267&fit=crop',
-  'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=400&h=267&fit=crop',
+  PHOTO_EXTERIOR_FRONT,
+  PHOTO_FRONT_PORCH,
+  PHOTO_LIVING_ROOM,
+  PHOTO_KITCHEN,
+  PHOTO_DINING_ROOM,
+  PHOTO_PRIMARY_BEDROOM,
+  PHOTO_PRIMARY_BATHROOM,
+  PHOTO_OFFICE,
+  PHOTO_SECONDARY_BATHROOM,
+  PHOTO_BACKYARD,
+  PHOTO_AERIAL,
 ]
 
 function PhotoUploadScreen({
@@ -1574,7 +1638,6 @@ function PhotoUploadScreen({
   onSave: (photos: string[]) => void
 }) {
   const [photos, setPhotos] = useState<string[]>(listing.uploadedPhotos)
-  const [optimize, setOptimize] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<{ index: number; src: string } | null>(null)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
@@ -1607,24 +1670,35 @@ function PhotoUploadScreen({
   }
 
   const handleDropzoneClick = () => {
-    // Exclude anything already in this session's photos AND anything already
-    // authorized for this listing, so a deleted-then-re-added photo is never
-    // silently treated as "already covered" by the prior consent.
-    const excluded = new Set([...photos, ...listing.uploadedPhotos])
-    let remaining = SAMPLE_HOUSE_PHOTOS.filter((url) => !excluded.has(url))
-    if (remaining.length === 0) {
-      // Sample pool exhausted for this listing — recycle it with a
-      // cache-busting suffix so the dropzone still simulates a fresh upload.
-      remaining = SAMPLE_HOUSE_PHOTOS.map((url) => `${url}&v=${Date.now()}`)
-    }
-    const batchSize = photos.length === 0 ? 5 : 3
-    setPhotos((prev) => [...prev, ...remaining.slice(0, batchSize)])
+    // Everything is derived from `prev` rather than the `photos` closure, so two
+    // clicks in the same render can't both pick the same batch and duplicate it.
+    setPhotos((prev) => {
+      // Exclude anything already in this session's photos AND anything already
+      // authorized for this listing, so a deleted-then-re-added photo is never
+      // silently treated as "already covered" by the prior consent.
+      const excluded = new Set([...prev, ...listing.uploadedPhotos])
+      let remaining = SAMPLE_HOUSE_PHOTOS.filter((url) => !excluded.has(url))
+      if (remaining.length === 0) {
+        // Sample pool exhausted for this listing — recycle it with a distinguishing
+        // suffix so the dropzone still simulates a fresh upload. A fragment (not a
+        // query string) keeps bundled asset URLs resolvable.
+        remaining = SAMPLE_HOUSE_PHOTOS.map((url) => `${url}#v=${Date.now()}`)
+      }
+      // One click stands in for selecting the whole shoot, so take everything.
+      return [...prev, ...remaining]
+    })
   }
 
+  // Re-entering the upload screen on a listing that already has enhanced media
+  // means the next save regenerates that media rather than creating it.
+  const isRegeneration = listing.mediaEnhanced === true
+  const regenerationsRemaining = regenerationsLeft(listing)
+
+  // Nothing is published yet on the first pass, so removing a photo is harmless —
+  // only warn once a delete would force the live enhanced media to be regenerated.
   const handleDeletePhoto = (index: number) => {
-    const src = photos[index]
-    if (listing.uploadedPhotos.includes(src)) {
-      setDeleteTarget({ index, src })
+    if (isRegeneration) {
+      setDeleteTarget({ index, src: photos[index] })
     } else {
       setPhotos((prev) => prev.filter((_, i) => i !== index))
     }
@@ -1652,6 +1726,15 @@ function PhotoUploadScreen({
           </p>
         </div>
 
+        {isRegeneration && (
+          <InlineMessage
+            styleType="info"
+            title={`${regenerationsRemaining} regenerations remaining`}
+          >
+            Adding or removing photos will regenerate your enhanced video and room renovations from your new photo set. This will replace what's currently on your listing and can't be undone.
+          </InlineMessage>
+        )}
+
         <div
           className={css({
             bg: 'bg.base',
@@ -1672,28 +1755,6 @@ function PhotoUploadScreen({
             <span className={css({ textStyle: 'caption', color: 'text.alternate' })}>
               Minimum 5 photos required for custom photos
             </span>
-          </div>
-
-          {/* Optimize toggle bubble */}
-          <div
-            className={hstack({
-              gap: '500',
-              alignItems: 'flex-start',
-              bg: 'bg.alternate',
-              borderRadius: '300',
-              p: '500',
-            })}
-          >
-            <IconMagicWand size={3} />
-            <div className={vstack({ alignItems: 'flex-start', gap: '100', flex: '1' })}>
-              <span className={css({ textStyle: 'bodyMd', fontWeight: 'bold', color: 'text.base' })}>
-                Automatically optimize my photos
-              </span>
-              <span className={css({ textStyle: 'bodyMd', color: 'text.base' })}>
-                Conservative enhancements only (lighting, color, geometry). ON by default.
-              </span>
-            </div>
-            <Toggle checked={optimize} onChange={(_, checked) => setOptimize(checked)} />
           </div>
 
           {/* Dropzone */}
@@ -1779,17 +1840,16 @@ function PhotoUploadScreen({
             disabled={photos.length === 0}
             onClick={() => onSave(photos)}
           >
-            Save images
+            {isRegeneration ? 'Regenerate media' : 'Save images'}
           </Button>
         </div>
       </div>
 
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} mobileLayout="fullScreen">
-        <Modal.Header title="This photo is live on your listing" />
+        <Modal.Header title="Delete this photo?" />
         <Modal.Body>
           <p className={css({ textStyle: 'bodyLg', color: 'text.base' })}>
-            Deleting this photo will remove it from your listing photos, but it may still appear in
-            AI-generated media that's already live.
+            By deleting this photo, your enhanced media will need to be regenerated.
           </p>
         </Modal.Body>
         <Modal.Footer>
@@ -1856,8 +1916,6 @@ function PromoteModal({
 
 // ─── Save images consent modal ───────────────────────────────────────────────────
 
-const AUTHORIZATION_RELEASE_PDF_URL = `${import.meta.env.BASE_URL}Authorization-and-Release.pdf`
-
 function SaveImagesModal({
   open,
   onClose,
@@ -1887,7 +1945,7 @@ function SaveImagesModal({
       <Modal.Body>
         <div className={vstack({ alignItems: 'stretch', gap: '600' })}>
           <p className={css({ textStyle: 'bodyLg', color: 'text.base' })}>
-            Before you upload. Photos you submit are governed by our{' '}
+            Before you upload photos, please read this{' '}
             <Link
               href={AUTHORIZATION_RELEASE_PDF_URL}
               target="_blank"
@@ -1897,9 +1955,13 @@ function SaveImagesModal({
             >
               Authorization and Release
             </Link>
-            . By accepting the Authorization and Release, you confirm you own or have permission
-            to provide the photos to Realtor.com and to authorize use of the photos as set forth
-            in the Authorization and Release.
+            . By checking the below box, you agree to the Authorization and Release. Further, by
+            checking the below box, you confirm that you are the owner or licensee of all photos
+            that you upload and that you have the rights to upload all such photos and to grant
+            all of the rights and permissions granted in the Authorization and Release. You also
+            authorize Realtor.com to display any video walk-through or other enhanced media
+            created using the uploaded photos as the first photo(s) (i.e., ahead of MLS-provided
+            photos) in the photo carousel for the applicable property on Realtor.com.
           </p>
 
           <div
@@ -1943,194 +2005,95 @@ function SaveImagesModal({
   )
 }
 
-// ─── Experience nav panel ─────────────────────────────────────────────────────────
+// ─── Publishing photos progress modal ────────────────────────────────────────────
 
-type Experience = 'overview' | 'team' | 'agent'
+const PUBLISH_STEP_MS = 700
 
-const EXPERIENCES: { id: Experience; label: string; icon: React.ReactNode }[] = [
-  { id: 'overview', label: 'Overview', icon: <IconBuildingOverview size={3} /> },
-  { id: 'team', label: 'Team experience', icon: <IconUsers size={3} /> },
-  { id: 'agent', label: 'Agent experience', icon: <IconAgent size={3} /> },
-]
-
-type PreviewSize = 'web' | 'ipad' | 'mobile'
-
-const PREVIEW_SIZES: { id: PreviewSize; label: string }[] = [
-  { id: 'web', label: 'Web' },
-  { id: 'ipad', label: 'iPad' },
-  { id: 'mobile', label: 'Mobile web' },
-]
-
-function DevicePreviewFrame({
-  size,
-  children,
+function PublishingPhotosModal({
+  photos,
+  onCancel,
+  onComplete,
 }: {
-  size: PreviewSize
-  children: React.ReactNode
+  /** Non-null while publishing; the photos being uploaded, in order. */
+  photos: string[] | null
+  onCancel: () => void
+  onComplete: () => void
 }) {
-  if (size === 'web') return <>{children}</>
+  const [uploaded, setUploaded] = useState(0)
+  const total = photos?.length ?? 0
 
-  const width = size === 'mobile' ? 375 : 768
-  const height = size === 'mobile' ? 812 : 1024
+  // Keeps the advance effect from re-running just because the parent re-rendered
+  // with a fresh onComplete closure.
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
+
+  // Reset the counter every time a new publish run starts.
+  useEffect(() => {
+    if (photos) setUploaded(0)
+  }, [photos])
+
+  // Advance one photo per tick, then hand off to onComplete.
+  useEffect(() => {
+    if (!photos || total === 0) return
+    if (uploaded >= total) {
+      const done = setTimeout(onCompleteRef.current, PUBLISH_STEP_MS / 2)
+      return () => clearTimeout(done)
+    }
+    const next = setTimeout(() => setUploaded((n) => n + 1), PUBLISH_STEP_MS)
+    return () => clearTimeout(next)
+  }, [photos, total, uploaded])
+
+  const current = Math.min(uploaded + 1, Math.max(total, 1))
 
   return (
-    <div
-      className={css({
-        minH: '100dvh',
-        bg: 'bg.alternate',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        p: '700',
-        overflow: 'auto',
-      })}
-    >
-      {/*
-        A real iframe (not a resized div) is required here: CSS media queries
-        evaluate against the actual browser viewport, not a container's width,
-        so only an iframe's own independent viewport makes the app's
-        responsive breakpoints (sidebar/hamburger, table columns, etc.)
-        actually respond to the simulated device size.
-      */}
-      <iframe
-        key={size}
-        title={`Preview at ${size === 'mobile' ? 'mobile' : 'iPad'} size`}
-        src={window.location.href}
-        className={css({
-          maxH: '100%',
-          flexShrink: 0,
-          bg: 'bg.base',
-          borderRadius: '300',
-          boxShadow: 'dialog',
-          border: 'none',
-        })}
-        style={{ width, height }}
-      />
-    </div>
-  )
-}
-
-function ExperienceNavTrigger({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label="Switch experience"
-      onClick={onClick}
-      className={css({
-        position: 'fixed',
-        bottom: '500',
-        left: '500',
-        zIndex: 'toast',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        w: '48px',
-        h: '48px',
-        borderRadius: '500',
-        bg: 'bg.inverse',
-        color: 'text.inverse',
-        cursor: 'pointer',
-        boxShadow: 'dialog',
-        _hoverSupported: { bg: 'bg.inverse.alternate' },
-      })}
-    >
-      <IconGridView size={3} />
-    </button>
-  )
-}
-
-function ExperienceNavPanel({
-  open,
-  experience,
-  onClose,
-  onSelect,
-  onReset,
-  previewSize,
-  onSelectPreviewSize,
-}: {
-  open: boolean
-  experience: Experience
-  onClose: () => void
-  onSelect: (experience: Experience) => void
-  onReset: () => void
-  previewSize: PreviewSize
-  onSelectPreviewSize: (size: PreviewSize) => void
-}) {
-  return (
-    <Modal open={open} onClose={onClose} layout="drawer" drawerPosition="left" size="sm">
-      <Modal.Header title="Prototype navigation" />
-      <Modal.Body noPadding className={css({ display: 'flex', flexDirection: 'column' })}>
-        <div className={vstack({ alignItems: 'stretch', gap: '200', px: '500', py: '400' })}>
-          <span className={css({ textStyle: 'caption', color: 'text.alternate', fontWeight: 'bold' })}>
-            Preview size
-          </span>
-          <ContentSwitch size="sm" equalWidths>
-            {PREVIEW_SIZES.map((size) => (
-              <ContentSwitch.Item
-                key={size.id}
-                selected={previewSize === size.id}
-                onClick={() => onSelectPreviewSize(size.id)}
-              >
-                {size.label}
-              </ContentSwitch.Item>
-            ))}
-          </ContentSwitch>
-        </div>
-        <ListBox>
-          <ListBox.Divider />
-          {EXPERIENCES.map((exp) => (
-            <ListBox.Item
-              key={exp.id}
-              value={exp.id}
-              startAddon={exp.icon}
-              selected={experience === exp.id}
-              onClick={() => onSelect(exp.id)}
-            >
-              {exp.label}
-            </ListBox.Item>
-          ))}
-          <ListBox.Divider />
-          <ListBox.Item
-            value="reset"
-            startAddon={<IconRefreshCw size={3} />}
-            onClick={onReset}
-          >
-            Reset prototype
-          </ListBox.Item>
-        </ListBox>
-        <div className={css({ mt: 'auto', px: '500', pt: '500', pb: '1200' })}>
+    <Modal open={!!photos} onClose={onCancel} mobileLayout="fullScreen">
+      <Modal.Header title="Publishing photos" />
+      <Modal.Body>
+        <div className={vstack({ alignItems: 'stretch', gap: '600' })}>
           <div
-            className={vstack({
-              alignItems: 'flex-start',
-              gap: '100',
-              borderWidth: '100',
-              borderStyle: 'solid',
-              borderColor: 'border.base',
-              bg: 'transparent',
+            className={css({
+              w: '100%',
+              maxW: '360px',
+              mx: 'auto',
+              aspectRatio: '3 / 2',
               borderRadius: '200',
-              px: '400',
-              py: '300',
+              overflow: 'hidden',
+              bg: 'bg.alternate',
             })}
           >
-            <span
-              className={css({
-                textStyle: 'caption',
-                color: 'text.alternate',
-                fontWeight: 'bold',
-                textTransform: 'uppercase',
-              })}
-            >
-              Sample prototype
+            {photos && photos[Math.min(uploaded, total - 1)] && (
+              <img
+                src={photos[Math.min(uploaded, total - 1)]}
+                alt=""
+                className={css({ w: '100%', h: '100%', objectFit: 'cover', display: 'block' })}
+              />
+            )}
+          </div>
+
+          <div className={vstack({ alignItems: 'stretch', gap: '200' })}>
+            <span className={css({ textStyle: 'bodySm', color: 'text.base' })}>
+              Photo {current} of {total}
             </span>
-            <span className={css({ textStyle: 'caption', color: 'text.alternate' })}>
-              Last updated: 8/4/2026
-            </span>
+            <ProgressBar
+              value={total === 0 ? 0 : Math.round((Math.min(uploaded + 1, total) / total) * 100)}
+              aria-label="Publishing photos progress"
+            />
           </div>
         </div>
       </Modal.Body>
     </Modal>
   )
 }
+
+// ─── Experiences ────────────────────────────────────────────────────────────────
+
+type Experience = 'overview' | 'team' | 'agent'
+
+const EXPERIENCES: { id: Experience; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'team', label: 'Team experience' },
+  { id: 'agent', label: 'Agent experience' },
+]
 
 function PlaceholderExperience({ label }: { label: string }) {
   return (
@@ -3824,6 +3787,964 @@ function EnhancedMediaEmailPreview() {
   )
 }
 
+// ─── Consumer listing detail page (realtor.com) ──────────────────────────────────
+
+/**
+ * The four enhanced-media tiles that sit beside the hero. Generated from the
+ * agent's uploaded photos, so they only appear once photos exist.
+ */
+const CONSUMER_MEDIA_TILES = [
+  { label: 'Kitchen', src: PHOTO_KITCHEN },
+  { label: 'Bathrooms', src: PHOTO_PRIMARY_BATHROOM },
+  { label: 'Bedrooms', src: PHOTO_PRIMARY_BEDROOM },
+  { label: 'FlyAround', src: PHOTO_AERIAL },
+]
+
+/**
+ * Renovation styles offered in the "See yourself in this home" module. Every
+ * `src` is a re-render of CONSUMER_RENOVATE_BEFORE, which is what lets the
+ * before/after slider compare the same room.
+ */
+const CONSUMER_STYLE_TILES = [
+  { label: 'Traditional', src: RENDER_TRADITIONAL },
+  { label: 'Contemporary', src: RENDER_CONTEMPORARY },
+  { label: 'Modern', src: RENDER_MODERN },
+  { label: 'Scandi', src: RENDER_SCANDI },
+  { label: 'Industrial', src: RENDER_INDUSTRIAL },
+  { label: 'Farmhouse', src: RENDER_FARMHOUSE },
+]
+
+/** The un-renovated room the style renders are generated from. */
+const CONSUMER_RENOVATE_BEFORE = PHOTO_LIVING_ROOM
+
+/**
+ * The renders are all ~849x434, so the module is sized to them — that way the
+ * "after" is never cropped and only the taller "before" gives up some height.
+ */
+const CONSUMER_RENOVATE_ASPECT = '849 / 434'
+
+/** Shown once a render exists, per the design's stronger disclosure. */
+const CONSUMER_RENOVATE_DISCLAIMER =
+  "Computer Generated Design Concept. This visualization is for inspiration only and does not depict the property's actual condition. Results are illustrative and may vary from actual property details. Not a representation of renovation feasibility or cost."
+
+const CONSUMER_HOME_FACTS = [
+  { icon: <IconHome size={3} />, value: 'Single family', caption: 'Property type' },
+  { icon: <IconSquareFootage size={3} />, value: '$553', caption: 'Price per sqft' },
+  { icon: <IconGarage size={3} />, value: '2 cars', caption: 'Garage' },
+  { icon: <IconHoa size={3} />, value: '$33/mo', caption: 'HOA fees' },
+  { icon: <IconCalendar size={3} />, value: '11 days', caption: 'On Realtor.com' },
+  { icon: <IconHammer size={3} />, value: '2017', caption: 'Year built' },
+]
+
+const CONSUMER_PROMPT_CHIPS = [
+  "What's nearby?",
+  'Recent renovation & improvements',
+  'Compare this home',
+  'Ask a question',
+]
+
+const CONSUMER_DESCRIPTION =
+  'Set well back from the street on a beautifully mature lot, this architect-designed home pairs warm cedar siding with generous walls of glass and a deep, welcoming front porch. The landscaped grounds include vibrant native plantings, established shade trees, and a stone patio built for long evenings outdoors. Inside, wide-plank white oak floors run through an open kitchen with honed marble counters, a butler’s pantry, and a sunlit breakfast nook overlooking the gardens. The primary suite occupies its own wing with a spa bath and a private terrace.'
+
+/** Small dark pill used for the "1/24" counters over media. */
+function MediaCounter({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className={css({
+        position: 'absolute',
+        // 16px inset and a 36px-tall pill, per the LDP frame.
+        top: '500',
+        right: '500',
+        px: '500',
+        py: '6px',
+        borderRadius: 'full',
+        bg: 'rgba(26, 24, 22, 0.72)',
+        color: 'white',
+        textStyle: 'bodyMd',
+        fontWeight: 'medium',
+      })}
+    >
+      {children}
+    </span>
+  )
+}
+
+/** Circular overlay control for carousel prev/next and play/pause. */
+function MediaControl({
+  label,
+  onClick,
+  children,
+  css: cssProp,
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+  css?: Parameters<typeof css>[0]
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className={css(
+        {
+          position: 'absolute',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          w: '48px',
+          h: '48px',
+          borderRadius: 'full',
+          bg: 'rgba(0, 0, 0, 0.6)',
+          color: 'white',
+          border: 'none',
+          cursor: 'pointer',
+          _hover: { bg: 'rgba(0, 0, 0, 0.78)' },
+        },
+        cssProp
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Fills the media frame it is positioned inside of. */
+const mediaFillImage = css({
+  position: 'absolute',
+  inset: '0',
+  w: '100%',
+  h: '100%',
+  objectFit: 'cover',
+  display: 'block',
+})
+
+/**
+ * Draggable before/after comparison. The "after" fills the frame and the
+ * "before" is clipped to the left of the divider, so dragging the handle wipes
+ * the renovation away. Mount with a `key` per style so each new render starts
+ * back at the middle.
+ */
+function BeforeAfterSlider({
+  beforeSrc,
+  afterSrc,
+  afterAlt,
+}: {
+  beforeSrc: string
+  afterSrc: string
+  afterAlt: string
+}) {
+  const [pct, setPct] = useState(50)
+  const trackRef = useRef<HTMLDivElement>(null)
+  const dragging = useRef(false)
+
+  const moveTo = (clientX: number) => {
+    const rect = trackRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0) return
+    setPct(Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100)))
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragging.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+    moveTo(e.clientX)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragging.current) moveTo(e.clientX)
+  }
+
+  const endDrag = () => {
+    dragging.current = false
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const delta = e.key === 'ArrowLeft' ? -5 : e.key === 'ArrowRight' ? 5 : 0
+    if (delta === 0) return
+    e.preventDefault()
+    setPct((p) => Math.min(100, Math.max(0, p + delta)))
+  }
+
+  return (
+    <div
+      ref={trackRef}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      className={css({
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: '300',
+        aspectRatio: CONSUMER_RENOVATE_ASPECT,
+        bg: 'bg.alternate',
+        touchAction: 'none',
+        userSelect: 'none',
+        cursor: 'ew-resize',
+      })}
+    >
+      <img src={afterSrc} alt={afterAlt} draggable={false} className={mediaFillImage} />
+      <img
+        src={beforeSrc}
+        alt="The same room as it looks today"
+        draggable={false}
+        className={mediaFillImage}
+        style={{ clipPath: `inset(0 ${100 - pct}% 0 0)` }}
+      />
+      <div
+        aria-hidden
+        className={css({
+          position: 'absolute',
+          top: '0',
+          bottom: '0',
+          w: '2px',
+          ml: '-1px',
+          bg: 'white',
+        })}
+        style={{ left: `${pct}%` }}
+      />
+      <div
+        role="slider"
+        tabIndex={0}
+        aria-label="Compare this room before and after renovation"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+        aria-valuetext={`${Math.round(pct)}% of the original photo shown`}
+        onKeyDown={handleKeyDown}
+        className={css({
+          position: 'absolute',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          w: '48px',
+          h: '48px',
+          borderRadius: 'full',
+          bg: 'white',
+          color: 'text.base',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.28)',
+          cursor: 'ew-resize',
+        })}
+        style={{ left: `${pct}%` }}
+      >
+        <IconChevronLeft size={2} />
+        <IconChevronRight size={2} />
+      </div>
+    </div>
+  )
+}
+
+function ConsumerLdpScreen({ listing, onBack }: { listing: Listing; onBack: () => void }) {
+  // Fall back to the listing's own hero shot so the page still renders if it is
+  // reached before any photos were uploaded.
+  const heroPhotos = listing.uploadedPhotos.length > 0 ? listing.uploadedPhotos : [listing.photo]
+  // The main spot opens on the generated walkthrough video; the agent's photos
+  // sit behind it in the same carousel.
+  const heroMedia: { kind: 'video' | 'photo'; src: string }[] = [
+    { kind: 'video', src: WALKTHROUGH_VIDEO_URL },
+    ...heroPhotos.map((src) => ({ kind: 'photo' as const, src })),
+  ]
+  const [heroIndex, setHeroIndex] = useState(0)
+  const [playing, setPlaying] = useState(true)
+  const heroItem = heroMedia[heroIndex]
+  const heroVideoRef = useRef<HTMLVideoElement>(null)
+  // Picking a tile only stages a choice — `selectedStyleIndex`. Nothing renders
+  // until Renovate is pressed, at which point `generating` holds the in-flight
+  // request and `styleIndex` holds whatever came back. `generating` is an object
+  // so every request is a distinct value, even for the same style twice running.
+  const [selectedStyleIndex, setSelectedStyleIndex] = useState<number | null>(null)
+  const [styleIndex, setStyleIndex] = useState<number | null>(null)
+  const [generating, setGenerating] = useState<{ index: number } | null>(null)
+  const [descExpanded, setDescExpanded] = useState(false)
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+
+  // Photos advance on their own until the buyer pauses. The video is left alone
+  // — it loops for as long as the buyer wants to watch it.
+  useEffect(() => {
+    if (!playing || heroItem.kind === 'video' || heroMedia.length < 2) return
+    const id = window.setInterval(
+      () => setHeroIndex((i) => (i + 1) % heroMedia.length),
+      3500
+    )
+    return () => window.clearInterval(id)
+  }, [playing, heroItem.kind, heroMedia.length])
+
+  // One play/pause control drives both media types, so the video has to follow
+  // `playing` rather than just its own autoplay attribute.
+  useEffect(() => {
+    const video = heroVideoRef.current
+    if (!video) return
+    if (playing) {
+      // A browser can still refuse to start it; the buyer then presses play.
+      void video.play().catch(() => {})
+    } else {
+      video.pause()
+    }
+  }, [playing, heroIndex])
+
+  const step = (delta: number) => {
+    setPlaying(false)
+    setHeroIndex((i) => (i + delta + heroMedia.length) % heroMedia.length)
+  }
+
+  // Stand-in for the render round trip.
+  useEffect(() => {
+    if (!generating) return
+    const id = window.setTimeout(() => {
+      setStyleIndex(generating.index)
+      setGenerating(null)
+    }, 2000)
+    return () => window.clearTimeout(id)
+  }, [generating])
+
+  const generateStyle = (index: number) => {
+    // Drop the current render first so the generating state can't be mistaken
+    // for a finished one.
+    setStyleIndex(null)
+    setGenerating({ index })
+  }
+
+  const totalMedia = 24
+  const activeStyle = styleIndex === null ? null : CONSUMER_STYLE_TILES[styleIndex]
+
+  return (
+    <div className={css({ bg: 'bg.base', minH: '100dvh', pb: '900' })}>
+      {/* Consumer header — doubles as the way back into the PRO prototype */}
+      <div
+        className={css({
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          bg: 'bg.base',
+          borderBottomWidth: '100',
+          borderBottomStyle: 'solid',
+          borderBottomColor: 'border.base',
+          px: { base: '400', md: '600' },
+          h: '56px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '400',
+        })}
+      >
+        <Button
+          styleType="Ghost"
+          size="sm"
+          startIcon={<IconChevronLeft size={3} />}
+          onClick={onBack}
+        >
+          Search
+        </Button>
+        <LogoBrand height={24} />
+        <div className={hstack({ gap: '200', alignItems: 'center' })}>
+          <Button styleType="Secondary" size="sm" iconOnly={<IconHeart size={3} />} aria-label="Save" />
+          <Button styleType="Secondary" size="sm" iconOnly={<IconShare size={3} />} aria-label="Share" />
+          <Button
+            styleType="Secondary"
+            size="sm"
+            iconOnly={<IconHomeSlash size={3} />}
+            aria-label="Hide"
+          />
+        </div>
+      </div>
+
+      {/* Hero + enhanced media tiles */}
+      <div
+        className={css({
+          display: 'grid',
+          // The design splits 1328px of content into an 864px hero and a 464px
+          // tile column, so the tracks carry those figures rather than a rounded
+          // 2:1 — at 2:1 the square tiles come up 27px short of the hero.
+          gridTemplateColumns: { base: '1fr', lg: '864fr 464fr' },
+          gap: '100',
+          // Full bleed, flush under the header, exactly as the frame has it.
+          px: '0',
+          pt: '0',
+          maxW: '1728px',
+          mx: 'auto',
+        })}
+      >
+        <div
+          className={css({
+            position: 'relative',
+            overflow: 'hidden',
+            aspectRatio: '864 / 457',
+            bg: 'bg.alternate',
+          })}
+        >
+          {heroItem.kind === 'video' ? (
+            <video
+              ref={heroVideoRef}
+              src={heroItem.src}
+              // Muted and inline is what lets the walkthrough start by itself —
+              // browsers block autoplay that would make noise.
+              autoPlay
+              muted
+              loop
+              playsInline
+              className={css({ w: '100%', h: '100%', objectFit: 'cover', display: 'block' })}
+            />
+          ) : (
+            <img
+              src={heroItem.src}
+              alt=""
+              className={css({ w: '100%', h: '100%', objectFit: 'cover', display: 'block' })}
+            />
+          )}
+
+          <div className={css({ position: 'absolute', top: '500', left: '500' })}>
+            <Tag dataColor="blue" startIcon={<IconZap size={2} />}>
+              Spotlight
+            </Tag>
+          </div>
+
+          <MediaCounter>
+            {heroIndex + 1}/{totalMedia}
+          </MediaCounter>
+
+          {heroMedia.length > 1 && (
+            <>
+              <MediaControl
+                label="Previous photo"
+                onClick={() => step(-1)}
+                css={{ left: '500', top: '50%', transform: 'translateY(-50%)' }}
+              >
+                <IconChevronLeft size={3} />
+              </MediaControl>
+              <MediaControl
+                label="Next photo"
+                onClick={() => step(1)}
+                css={{ right: '500', top: '50%', transform: 'translateY(-50%)' }}
+              >
+                <IconChevronRight size={3} />
+              </MediaControl>
+              <MediaControl
+                label={playing ? 'Pause walkthrough' : 'Play walkthrough'}
+                onClick={() => setPlaying((p) => !p)}
+                css={{ bottom: '500', left: '50%', transform: 'translateX(-50%)' }}
+              >
+                {playing ? <IconPauseFilled size={3} /> : <IconPlay size={3} />}
+              </MediaControl>
+            </>
+          )}
+
+          <p
+            className={css({
+              position: 'absolute',
+              bottom: '300',
+              right: '300',
+              maxW: '310px',
+              textAlign: 'right',
+              textStyle: 'caption',
+              color: 'white',
+              textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+            })}
+          >
+            Computer generated by Realtor.com based on listing photos. For illustrative purposes only
+            and may not be accurate.
+          </p>
+        </div>
+
+        {/* 2×2 grid of generated room media */}
+        <div
+          className={css({
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gridTemplateRows: '1fr 1fr',
+            // The frame separates the tiles with 2px white borders on each side
+            // of every seam, so the seams read as 4px.
+            gap: '200',
+          })}
+        >
+          {CONSUMER_MEDIA_TILES.map((tile) => (
+            <button
+              key={tile.label}
+              type="button"
+              className={css({
+                position: 'relative',
+                overflow: 'hidden',
+                // No fixed ratio: the tiles fill their tracks, which is what
+                // makes the block bottom-align with the hero. At the design's
+                // column widths that lands them on the frame's 232×228.
+                h: '100%',
+                bg: 'bg.alternate',
+                border: 'none',
+                p: '0',
+                cursor: 'pointer',
+                display: 'block',
+              })}
+            >
+              <img
+                src={tile.src}
+                alt=""
+                className={css({ w: '100%', h: '100%', objectFit: 'cover', display: 'block' })}
+              />
+              <span
+                className={css({
+                  position: 'absolute',
+                  bottom: '300',
+                  left: '300',
+                  color: 'white',
+                  textStyle: 'bodyMd',
+                  fontWeight: 'semibold',
+                  textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                })}
+              >
+                {tile.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Agent attribution strip */}
+      <div
+        className={css({
+          bg: 'bg.alternate',
+          px: { base: '400', md: '600' },
+          py: '300',
+          maxW: '1728px',
+          mx: 'auto',
+        })}
+      >
+        <div className={hstack({ gap: '300', alignItems: 'center', flexWrap: 'wrap' })}>
+          <Avatar size="sm" initials={listing.agent.split(' ')} />
+          <span className={css({ textStyle: 'bodySm', color: 'text.base' })}>
+            Listed by{' '}
+            <Link href="#" underline="default" size="inline">
+              {listing.agent}
+            </Link>
+          </span>
+          <span className={css({ textStyle: 'bodySm', color: 'text.alternate' })}>|</span>
+          <span className={css({ textStyle: 'bodySm', color: 'text.base' })}>
+            Brokered by Coldwell Banker Brokers of the Valley
+          </span>
+        </div>
+      </div>
+
+      {/* Body: main column + lead form sidebar */}
+      <div
+        className={css({
+          maxW: '1328px',
+          mx: 'auto',
+          px: { base: '400', md: '600' },
+          pt: '700',
+          display: 'grid',
+          gridTemplateColumns: { base: '1fr', lg: 'minmax(0, 1fr) 316px' },
+          gap: { base: '700', lg: '800' },
+          alignItems: 'start',
+        })}
+      >
+        <div className={vstack({ alignItems: 'stretch', gap: '800' })}>
+          {/* Price + stats + address */}
+          <div className={vstack({ alignItems: 'flex-start', gap: '300' })}>
+            <div className={hstack({ gap: '200', alignItems: 'center' })}>
+              <span
+                className={css({
+                  w: '8px',
+                  h: '8px',
+                  borderRadius: 'full',
+                  bg: 'green.500',
+                  flexShrink: 0,
+                })}
+              />
+              <span className={css({ textStyle: 'bodySm', color: 'text.base' })}>
+                House for sale
+              </span>
+            </div>
+            <p className={css({ textStyle: 'displaySm', fontWeight: 'bold', color: 'text.base' })}>
+              {listing.price}
+            </p>
+            <div className={hstack({ gap: '300', alignItems: 'center', flexWrap: 'wrap' })}>
+              {[
+                ['4', 'bed'],
+                ['3.5', 'bath'],
+                ['3,082', 'sqft'],
+                ['1.5', 'acre lot'],
+              ].map(([value, unit], i) => (
+                <div key={unit} className={hstack({ gap: '300', alignItems: 'center' })}>
+                  {i > 0 && (
+                    <span className={css({ textStyle: 'bodyMd', color: 'text.alternate' })}>•</span>
+                  )}
+                  <span className={css({ textStyle: 'bodyLg', color: 'text.base' })}>
+                    <strong>{value}</strong> {unit}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className={css({ textStyle: 'bodyLg', color: 'text.base' })}>
+              {listing.address1}, {listing.address2}
+            </p>
+            <div className={hstack({ gap: '200', alignItems: 'center' })}>
+              <span className={css({ textStyle: 'bodySm', color: 'text.alternate' })}>
+                Est. $4,637/mo
+              </span>
+              <Button
+                styleType="Ghost"
+                size="inline"
+                iconOnly={<IconEdit size={2} />}
+                aria-label="Edit monthly payment estimate"
+              />
+            </div>
+            <div className={vstack({ alignItems: 'flex-start', gap: '200', pt: '200' })}>
+              <Link href="#" underline="default" size="md">
+                Veterans: How much home can you afford?
+              </Link>
+              <Link href="#" underline="default" size="md">
+                What can you buy? (It's easy to find out)
+              </Link>
+            </div>
+          </div>
+
+          {/* About this home */}
+          <div className={vstack({ alignItems: 'stretch', gap: '500' })}>
+            <h2 className={css({ textStyle: 'headingSm', color: 'text.base' })}>About this home</h2>
+            <div
+              className={css({
+                display: 'grid',
+                gridTemplateColumns: { base: '1fr', sm: '1fr 1fr', lg: '1fr 1fr 300px' },
+                gap: '600',
+              })}
+            >
+              <div className={vstack({ alignItems: 'stretch', gap: '500' })}>
+                {CONSUMER_HOME_FACTS.slice(0, 3).map((fact) => (
+                  <ConsumerFact key={fact.caption} {...fact} />
+                ))}
+              </div>
+              <div className={vstack({ alignItems: 'stretch', gap: '500' })}>
+                {CONSUMER_HOME_FACTS.slice(3).map((fact) => (
+                  <ConsumerFact key={fact.caption} {...fact} />
+                ))}
+              </div>
+              <div
+                className={css({
+                  borderWidth: '100',
+                  borderStyle: 'solid',
+                  borderColor: 'border.base',
+                  borderRadius: '300',
+                  overflow: 'hidden',
+                })}
+              >
+                <div
+                  className={css({
+                    h: '128px',
+                    bg: 'bg.alternate',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  })}
+                >
+                  <span className={css({ textStyle: 'caption', color: 'text.alternate' })}>
+                    Map of {listing.address2}
+                  </span>
+                </div>
+                <div
+                  className={hstack({
+                    gap: '200',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    py: '300',
+                  })}
+                >
+                  <IconCar size={2} />
+                  <Link href="#" underline="default" size="md">
+                    Add a commute
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className={vstack({ alignItems: 'flex-start', gap: '500' })}>
+            <p className={css({ textStyle: 'bodyMd', color: 'text.base' })}>
+              {descExpanded ? CONSUMER_DESCRIPTION : `${CONSUMER_DESCRIPTION.slice(0, 260)}… `}
+              <Button
+                styleType="Ghost"
+                size="inline"
+                onClick={() => setDescExpanded((v) => !v)}
+              >
+                {descExpanded ? 'Show less' : 'Show more'}
+              </Button>
+            </p>
+            <div className={hstack({ gap: '300', flexWrap: 'wrap' })}>
+              {CONSUMER_PROMPT_CHIPS.map((chip) => (
+                <Chip key={chip}>{chip}</Chip>
+              ))}
+            </div>
+          </div>
+
+          {/* Source / stats meta */}
+          <div className={vstack({ alignItems: 'flex-start', gap: '300' })}>
+            <p className={css({ textStyle: 'caption', color: 'text.alternate' })}>
+              Realtor.com checked: A few minutes ago | Listing last updated:{' '}
+              {formatListedDate(listing.listDate)} at 1:05 PM (CT)
+              <br />
+              Source: MRED, MLS #322056378
+            </p>
+            <div className={hstack({ gap: '300', alignItems: 'center' })}>
+              <span className={css({ textStyle: 'bodySm', color: 'text.base' })}>
+                <strong>17,038</strong>{' '}
+                <Link href="#" underline="dotted" size="inline">
+                  views
+                </Link>
+              </span>
+              <span className={css({ textStyle: 'bodySm', color: 'text.alternate' })}>|</span>
+              <span className={css({ textStyle: 'bodySm', color: 'text.base' })}>
+                <strong>68</strong>{' '}
+                <Link href="#" underline="dotted" size="inline">
+                  saves
+                </Link>
+              </span>
+            </div>
+          </div>
+
+          {/* Listing agent module */}
+          <div
+            className={css({
+              borderWidth: '100',
+              borderStyle: 'solid',
+              borderColor: 'border.base',
+              borderRadius: '300',
+              p: '500',
+              display: 'flex',
+              flexDirection: { base: 'column', md: 'row' },
+              gap: '500',
+              alignItems: { base: 'stretch', md: 'center' },
+              justifyContent: 'space-between',
+            })}
+          >
+            <div className={hstack({ gap: '400', alignItems: 'center' })}>
+              <Avatar size="lg" initials={listing.agent.split(' ')} />
+              <div className={vstack({ alignItems: 'flex-start', gap: '0' })}>
+                <span className={css({ textStyle: 'caption', color: 'text.alternate' })}>
+                  Listed by
+                </span>
+                <span
+                  className={css({
+                    textStyle: 'bodyLg',
+                    fontWeight: 'semibold',
+                    color: 'text.base',
+                  })}
+                >
+                  {listing.agent}
+                </span>
+                <span className={css({ textStyle: 'bodySm', color: 'text.alternate' })}>
+                  RE/MAX Realty group
+                </span>
+              </div>
+            </div>
+            <div className={hstack({ gap: '300', flexWrap: 'wrap' })}>
+              <Button styleType="Tertiary" size="lg">
+                View profile
+              </Button>
+              <Button styleType="Primary" size="lg">
+                Email {listing.agent.split(' ')[0]}
+              </Button>
+            </div>
+          </div>
+
+          {/* See yourself in this home */}
+          <div className={vstack({ alignItems: 'stretch', gap: '500' })}>
+            <h2 className={css({ textStyle: 'headingSm', color: 'text.base' })}>
+              See yourself in this home
+            </h2>
+            {activeStyle ? (
+              <>
+                <BeforeAfterSlider
+                  key={activeStyle.label}
+                  beforeSrc={CONSUMER_RENOVATE_BEFORE}
+                  afterSrc={activeStyle.src}
+                  afterAlt={`This room restyled in a ${activeStyle.label.toLowerCase()} look`}
+                />
+                <p className={css({ textStyle: 'caption', color: 'text.alternate' })}>
+                  {CONSUMER_RENOVATE_DISCLAIMER}
+                </p>
+              </>
+            ) : (
+              <div
+                className={css({
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '300',
+                  aspectRatio: CONSUMER_RENOVATE_ASPECT,
+                  bg: 'bg.alternate',
+                })}
+              >
+                <img
+                  src={CONSUMER_RENOVATE_BEFORE}
+                  alt="The living room as it looks today"
+                  className={mediaFillImage}
+                />
+                {generating && (
+                  <div
+                    className={css({
+                      position: 'absolute',
+                      inset: '0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bg: 'rgba(0, 0, 0, 0.45)',
+                    })}
+                  >
+                    <span
+                      role="status"
+                      className={css({
+                        textStyle: 'displayLg',
+                        fontWeight: 'bold',
+                        color: 'white',
+                      })}
+                    >
+                      Generating...
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div
+              className={css({
+                display: 'flex',
+                gap: '300',
+                overflowX: 'auto',
+                pb: '200',
+              })}
+            >
+              {CONSUMER_STYLE_TILES.map((tile, i) => (
+                <button
+                  key={tile.label}
+                  type="button"
+                  aria-pressed={i === selectedStyleIndex}
+                  onClick={() => setSelectedStyleIndex(i)}
+                  className={css({
+                    flexShrink: 0,
+                    w: '148px',
+                    p: '0',
+                    cursor: 'pointer',
+                    bg: i === selectedStyleIndex ? 'bg.alternate' : 'bg.base',
+                    textAlign: 'left',
+                    borderRadius: '200',
+                    overflow: 'hidden',
+                    borderWidth: '200',
+                    borderStyle: 'solid',
+                    borderColor: i === selectedStyleIndex ? 'border.highlight' : 'border.base',
+                  })}
+                >
+                  <img
+                    src={tile.src}
+                    alt=""
+                    className={css({
+                      w: '100%',
+                      h: '100px',
+                      objectFit: 'cover',
+                      display: 'block',
+                    })}
+                  />
+                  <span
+                    className={css({
+                      display: 'block',
+                      px: '300',
+                      py: '200',
+                      textStyle: 'bodySm',
+                      color: 'text.base',
+                    })}
+                  >
+                    {tile.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className={hstack({ gap: '300' })}>
+              <Button
+                styleType="Primary"
+                size="lg"
+                startIcon={<IconMagicWand size={3} />}
+                loading={generating !== null}
+                // Nothing to render until a style is staged, so the button spells
+                // out that picking a tile is the first step.
+                disabled={selectedStyleIndex === null}
+                onClick={() => {
+                  if (selectedStyleIndex !== null) generateStyle(selectedStyleIndex)
+                }}
+              >
+                Renovate
+              </Button>
+            </div>
+
+            {!activeStyle && (
+              <p className={css({ textStyle: 'caption', color: 'text.alternate' })}>
+                Computer generated by Realtor.com based on listing photos. For illustrative purposes
+                only and may not be accurate.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Lead form */}
+        <div
+          className={css({
+            borderWidth: '100',
+            borderStyle: 'solid',
+            borderColor: 'border.base',
+            borderRadius: '300',
+            p: '500',
+            position: isDesktop ? 'sticky' : 'static',
+            top: '72px',
+          })}
+        >
+          <div className={vstack({ alignItems: 'stretch', gap: '400' })}>
+            <TextInput label="Full name" required placeholder="Full name" />
+            <TextInput label="Email" required type="email" placeholder="Email" />
+            <TextInput label="Phone" required type="tel" placeholder="Phone" />
+            <div className={hstack({ gap: '200', alignItems: 'center' })}>
+              <Checkbox>I've served in the U.S. military</Checkbox>
+              <IconInfo size={2} />
+            </div>
+            <Button styleType="Emphasis" size="lg">
+              Ask a question
+            </Button>
+            <Button styleType="Tertiary" size="lg">
+              Schedule a tour
+            </Button>
+            <p className={css({ textStyle: 'caption', color: 'text.alternate' })}>
+              By proceeding, you consent to receive calls and texts at the number you provided,
+              including marketing by autodialer and prerecorded and artificial voice, and email, from
+              realtor.com and others about your inquiry and other home-related matters, but not as a
+              condition of any purchase.{' '}
+              <Link href="#" underline="default" size="inline">
+                More
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ConsumerFact({
+  icon,
+  value,
+  caption,
+}: {
+  icon: React.ReactNode
+  value: string
+  caption: string
+}) {
+  return (
+    <div className={hstack({ gap: '400', alignItems: 'flex-start' })}>
+      <span className={css({ color: 'text.base', flexShrink: 0 })}>{icon}</span>
+      <div className={vstack({ alignItems: 'flex-start', gap: '0' })}>
+        <span className={css({ textStyle: 'bodyMd', color: 'text.base' })}>{value}</span>
+        <span className={css({ textStyle: 'caption', color: 'text.alternate' })}>{caption}</span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Shell ──────────────────────────────────────────────────────────────────────
 
 type View =
@@ -3831,48 +4752,72 @@ type View =
   | { page: 'detail'; listingId: string }
   | { page: 'photo-upload'; listingId: string }
   | { page: 'promote-listings' }
+  | { page: 'consumer-ldp'; listingId: string }
+
+// "View on Realtor.com" opens a real second tab, which is a fresh app instance —
+// so the promoted/enhanced listing data has to travel through storage rather than
+// React state. The query string says which listing to open on.
+const DEEP_LINK_STORAGE_KEY = 'ir-prototype-listings'
+const DEEP_LINK_VIEW = 'consumer-ldp'
+
+/** Reads the deep link written by `openConsumerTab`, if this tab was opened by one. */
+function readConsumerDeepLink(): { listingId: string; listings: Listing[] } | null {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('view') !== DEEP_LINK_VIEW) return null
+  const listingId = params.get('listing')
+  if (!listingId) return null
+
+  let listings = LISTINGS
+  try {
+    const snapshot = window.localStorage.getItem(DEEP_LINK_STORAGE_KEY)
+    if (snapshot) listings = JSON.parse(snapshot) as Listing[]
+  } catch {
+    // No usable snapshot just means the buyer sees the pristine listing data.
+  }
+  return listings.some((l) => l.id === listingId) ? { listingId, listings } : null
+}
+
+/** The URL a second tab boots from to land straight on the buyer's view. */
+function consumerTabUrl(listingId: string) {
+  const url = new URL(window.location.href)
+  url.searchParams.set('view', DEEP_LINK_VIEW)
+  url.searchParams.set('listing', listingId)
+  return url.toString()
+}
+
+/** Leaves the current listing data where the tab about to open will find it. */
+function persistListingsForConsumerTab(listings: Listing[]) {
+  try {
+    window.localStorage.setItem(DEEP_LINK_STORAGE_KEY, JSON.stringify(listings))
+  } catch {
+    // Storage can be blocked; the new tab falls back to the pristine data.
+  }
+}
 
 export default function Shell() {
-  const [listings, setListings] = useState<Listing[]>(LISTINGS)
-  const [view, setView] = useState<View>({ page: 'list' })
+  const [deepLink] = useState(readConsumerDeepLink)
+  const [listings, setListings] = useState<Listing[]>(deepLink?.listings ?? LISTINGS)
+  const [view, setView] = useState<View>(
+    deepLink ? { page: 'consumer-ldp', listingId: deepLink.listingId } : { page: 'list' }
+  )
   const [promoteTargets, setPromoteTargets] = useState<Listing[] | null>(null)
-  const [toastListingId, setToastListingId] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ title: string; body?: string } | null>(null)
   const [showSaveConsent, setShowSaveConsent] = useState(false)
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([])
+  const [publishingPhotos, setPublishingPhotos] = useState<string[] | null>(null)
   const [experience, setExperience] = useState<Experience>('team')
-  const [navPanelOpen, setNavPanelOpen] = useState(false)
   const [sidebarPage, setSidebarPage] = useState<SidebarPage>('all-listings')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [overviewStep, setOverviewStep] = useState<'overview' | 'expectations' | 'toc'>('overview')
-  const [previewSize, setPreviewSize] = useState<PreviewSize>('web')
-
-  // When DevicePreviewFrame embeds the app in its own iframe to simulate a
-  // device size, that inner copy would otherwise render its own switcher on
-  // top of the outer page's — only the outer page's should ever show one.
-  const isEmbeddedPreview = typeof window !== 'undefined' && window.self !== window.top
 
   const handleSidebarNavigate = (page: SidebarPage) => {
     setSidebarPage(page)
     if (page === 'all-listings') setView({ page: 'list' })
   }
 
-  const handleResetPrototype = () => {
-    setListings(LISTINGS)
-    setView({ page: 'list' })
-    setPromoteTargets(null)
-    setToastListingId(null)
-    setShowSaveConsent(false)
-    setPendingPhotos([])
-    setSidebarPage('all-listings')
-    setExperience('team')
-    setNavPanelOpen(false)
-    setMobileNavOpen(false)
-    setOverviewStep('overview')
-    setPreviewSize('web')
-  }
-
   const selectedListing =
-    view.page === 'detail' || view.page === 'photo-upload'
+    view.page === 'detail' || view.page === 'photo-upload' || view.page === 'consumer-ldp'
       ? listings.find((l) => l.id === view.listingId)
       : undefined
 
@@ -3886,7 +4831,7 @@ export default function Shell() {
       )
       if (promotedIds.length === 1) {
         setView({ page: 'detail', listingId: promotedIds[0] })
-        setToastListingId(promotedIds[0])
+        setToast({ title: 'Your listing has been promoted and will begin later today.' })
       } else {
         setView({ page: 'list' })
       }
@@ -3894,19 +4839,43 @@ export default function Shell() {
     setPromoteTargets(null)
   }
 
+  // Commits the pending photos once the publishing progress modal finishes.
+  // A save on a listing that already had enhanced media burns one regeneration.
+  const handlePublishComplete = () => {
+    setPublishingPhotos(null)
+    if (!selectedListing) return
+    const targetId = selectedListing.id
+    const isRegeneration = selectedListing.mediaEnhanced === true
+    setListings((prev) =>
+      prev.map((l) =>
+        l.id === targetId
+          ? {
+              ...l,
+              uploadedPhotos: pendingPhotos,
+              mediaEnhanced: true,
+              regenerationsUsed: (l.regenerationsUsed ?? 0) + 1,
+            }
+          : l
+      )
+    )
+    setPendingPhotos([])
+    setView({ page: 'detail', listingId: targetId })
+    setToast({
+      title: 'Your photos have been saved',
+      body: 'Enhanced media will appear on your listing soon.',
+    })
+  }
+
   const showSidebar = view.page !== 'photo-upload'
 
   const handleSelectExperience = (next: Experience) => {
     setExperience(next)
     if (next === 'team') setView({ page: 'list' })
-    setNavPanelOpen(false)
     setOverviewStep('overview')
   }
 
   if (experience !== 'team') {
     return (
-      <>
-      <DevicePreviewFrame size={previewSize}>
       <div className={css({ minW: '320px', minH: '100dvh', bg: 'bg.base' })}>
         {experience === 'agent' ? (
           <EnhancedMediaEmailPreview />
@@ -3947,28 +4916,23 @@ export default function Shell() {
           </>
         )}
       </div>
-      </DevicePreviewFrame>
-      {!isEmbeddedPreview && (
-        <>
-          <ExperienceNavTrigger onClick={() => setNavPanelOpen(true)} />
-          <ExperienceNavPanel
-            open={navPanelOpen}
-            experience={experience}
-            onClose={() => setNavPanelOpen(false)}
-            onSelect={handleSelectExperience}
-            onReset={handleResetPrototype}
-            previewSize={previewSize}
-            onSelectPreviewSize={setPreviewSize}
-          />
-        </>
-      )}
-      </>
+    )
+  }
+
+  // The consumer listing page is what a buyer sees on realtor.com, so it renders
+  // without any of the PRO chrome — no TopBar, no side nav.
+  if (view.page === 'consumer-ldp' && selectedListing) {
+    return (
+      <div className={css({ minW: '320px' })}>
+        <ConsumerLdpScreen
+          listing={selectedListing}
+          onBack={() => setView({ page: 'detail', listingId: selectedListing.id })}
+        />
+      </div>
     )
   }
 
   return (
-    <>
-    <DevicePreviewFrame size={previewSize}>
     <div className={css({ minW: '320px', minH: '100dvh', bg: 'bg.base' })}>
       <TopBar onMenuClick={showSidebar ? () => setMobileNavOpen(true) : undefined} />
       {showSidebar && (
@@ -3997,16 +4961,13 @@ export default function Shell() {
             listing={selectedListing}
             onBack={() => setView({ page: 'detail', listingId: selectedListing.id })}
             onSave={(photos) => {
+              setPendingPhotos(photos)
               const hasNewPhotos = photos.some((p) => !selectedListing.uploadedPhotos.includes(p))
               if (hasNewPhotos) {
-                setPendingPhotos(photos)
+                // New photos need fresh Authorization and Release consent first.
                 setShowSaveConsent(true)
               } else {
-                const targetId = selectedListing.id
-                setListings((prev) =>
-                  prev.map((l) => (l.id === targetId ? { ...l, uploadedPhotos: photos } : l))
-                )
-                setView({ page: 'detail', listingId: targetId })
+                setPublishingPhotos(photos)
               }
             }}
           />
@@ -4042,6 +5003,8 @@ export default function Shell() {
                 onBack={() => setView({ page: 'list' })}
                 onPromote={(listing) => setPromoteTargets([listing])}
                 onEnhance={(listing) => setView({ page: 'photo-upload', listingId: listing.id })}
+                viewOnRealtorHref={consumerTabUrl(selectedListing.id)}
+                onViewOnRealtor={() => persistListingsForConsumerTab(listings)}
               />
             )}
           </div>
@@ -4060,41 +5023,20 @@ export default function Shell() {
         onDeny={() => setShowSaveConsent(false)}
         onConfirm={() => {
           setShowSaveConsent(false)
-          if (selectedListing) {
-            const targetId = selectedListing.id
-            setListings((prev) =>
-              prev.map((l) =>
-                l.id === targetId ? { ...l, uploadedPhotos: pendingPhotos, mediaEnhanced: true } : l
-              )
-            )
-            setView({ page: 'detail', listingId: targetId })
-          }
+          setPublishingPhotos(pendingPhotos)
         }}
       />
 
-      <Toast
-        show={!!toastListingId}
-        onClose={() => setToastListingId(null)}
-        status="success"
-        title="Your listing has been promoted and will begin later today."
+      <PublishingPhotosModal
+        photos={publishingPhotos}
+        onCancel={() => setPublishingPhotos(null)}
+        onComplete={handlePublishComplete}
       />
 
+      <Toast show={!!toast} onClose={() => setToast(null)} status="success" title={toast?.title}>
+        {toast?.body}
+      </Toast>
+
     </div>
-    </DevicePreviewFrame>
-    {!isEmbeddedPreview && (
-      <>
-        <ExperienceNavTrigger onClick={() => setNavPanelOpen(true)} />
-        <ExperienceNavPanel
-          open={navPanelOpen}
-          experience={experience}
-          onClose={() => setNavPanelOpen(false)}
-          onSelect={handleSelectExperience}
-          onReset={handleResetPrototype}
-          previewSize={previewSize}
-          onSelectPreviewSize={setPreviewSize}
-        />
-      </>
-    )}
-    </>
   )
 }
