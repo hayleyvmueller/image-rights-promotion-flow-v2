@@ -1661,6 +1661,10 @@
     font-weight: var(--font-weights-medium);
 }
 
+  .c_text\.disabled {
+    color: var(--colors-text-disabled);
+}
+
   .asp_4_\/_3 {
     aspect-ratio: 4 / 3;
 }
@@ -1952,10 +1956,6 @@
 
   .cursor_not-allowed {
     cursor: not-allowed;
-}
-
-  .c_text\.disabled {
-    color: var(--colors-text-disabled);
 }
 
   .flex-g_1 {

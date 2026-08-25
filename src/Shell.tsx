@@ -1,4 +1,5 @@
 import { useState, useLayoutEffect, useEffect, useRef } from 'react'
+import { markTrustedHandoff } from './PasswordGate'
 import {
   SideNavigation,
   SideNavigationItem,
@@ -4835,6 +4836,8 @@ function persistListingsForConsumerTab(listings: Listing[]) {
   } catch {
     // Storage can be blocked; the new tab falls back to the pristine data.
   }
+  // The buyer already unlocked this tab, so the one they're about to open shouldn't ask again.
+  markTrustedHandoff()
 }
 
 export default function Shell() {
