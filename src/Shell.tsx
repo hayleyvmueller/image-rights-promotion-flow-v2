@@ -326,6 +326,11 @@ const SEGMENTS = ['For sale', 'For rent', 'Sold', 'ListHub']
 
 const AVAILABLE_PROMOTIONS = 18
 
+/** Listings below this completeness can't be promoted yet. */
+const PROMOTE_MIN_COMPLETENESS = 75
+
+const canPromote = (listing: Listing) => listing.completeness >= PROMOTE_MIN_COMPLETENESS
+
 /** Agents get a fixed number of enhanced-media regenerations per listing. */
 const MAX_REGENERATIONS = 3
 
@@ -907,7 +912,7 @@ function AllListingsScreen({
                         Add media
                       </Button>
                     </div>
-                  ) : (
+                  ) : canPromote(l) ? (
                     <div className={vstack({ alignItems: 'flex-start', gap: '100' })}>
                       <Link
                         href="#"
@@ -925,6 +930,21 @@ function AllListingsScreen({
                         {l.promotionStatus}
                       </span>
                     </div>
+                  ) : (
+                    <Tooltip
+                      placement="bottom"
+                      body={`Reach ${PROMOTE_MIN_COMPLETENESS}% listing completeness to promote this listing.`}
+                    >
+                      <span
+                        className={css({
+                          textStyle: 'bodySm',
+                          fontWeight: 'medium',
+                          color: 'text.disabled',
+                        })}
+                      >
+                        Unavailable
+                      </span>
+                    </Tooltip>
                   )}
                 </Table.Cell>
 
@@ -1028,7 +1048,7 @@ function PromoteListingsScreen({
               Select listings for promotion
             </span>
             <span className={css({ textStyle: 'caption', color: 'text.alternate' })}>
-              {eligible.length} promotions available
+              {eligible.filter(canPromote).length} promotions available
             </span>
           </div>
           {selected.size > 0 && (
@@ -1071,7 +1091,16 @@ function PromoteListingsScreen({
             {filtered.map((l) => (
               <Table.Row key={l.id}>
                 <Table.Cell>
-                  <Checkbox checked={selected.has(l.id)} onChange={() => toggleSelect(l.id)} />
+                  {canPromote(l) ? (
+                    <Checkbox checked={selected.has(l.id)} onChange={() => toggleSelect(l.id)} />
+                  ) : (
+                    <Tooltip
+                      placement="bottom"
+                      body={`Reach ${PROMOTE_MIN_COMPLETENESS}% listing completeness to promote this listing.`}
+                    >
+                      <Checkbox checked={false} disabled onChange={() => {}} />
+                    </Tooltip>
+                  )}
                 </Table.Cell>
 
                 {/* Property */}
@@ -1464,14 +1493,27 @@ function ListingDetailScreen({
                         a richer way to explore the listing.
                       </p>
                     </div>
-                    <Button
-                      styleType="Primary"
-                      size="lg"
-                      startIcon={<IconZap size={3} />}
-                      onClick={() => onPromote(listing)}
-                    >
-                      Promote
-                    </Button>
+                    {canPromote(listing) ? (
+                      <Button
+                        styleType="Primary"
+                        size="lg"
+                        startIcon={<IconZap size={3} />}
+                        onClick={() => onPromote(listing)}
+                      >
+                        Promote
+                      </Button>
+                    ) : (
+                      <Tooltip
+                        placement="bottom"
+                        body={`Reach ${PROMOTE_MIN_COMPLETENESS}% listing completeness to promote this listing.`}
+                      >
+                        {/* Haven marks disabled buttons with aria-disabled rather than the
+                            native attribute, so hover and focus still reach the trigger. */}
+                        <Button styleType="Primary" size="lg" disabled>
+                          Unavailable
+                        </Button>
+                      </Tooltip>
+                    )}
                   </>
                 )}
               </div>
