@@ -460,7 +460,6 @@ function ListingCompletenessCard({ listing }: { listing: Listing }) {
   return (
     <div
       className={css({
-        mt: '600',
         bg: 'bg.base',
         borderWidth: '100',
         borderStyle: 'solid',
@@ -1683,7 +1682,7 @@ function ListingDetailScreen({
                   >
                     <div className={hstack({ gap: '400', alignItems: 'center' })}>
                       <IconRealAssist size={3} />
-                      <h2 className={css({ textStyle: 'headingSm', color: 'text.base' })}>
+                      <h2 className={css({ textStyle: 'headingMd', fontWeight: 'bold', color: 'text.base' })}>
                         Enhanced media
                       </h2>
                     </div>
@@ -1756,7 +1755,7 @@ function ListingDetailScreen({
                 })}
               >
                 <div className={vstack({ alignItems: 'flex-start', gap: '300', flex: '1' })}>
-                  <h2 className={css({ textStyle: 'headingSm', color: 'text.base' })}>
+                  <h2 className={css({ textStyle: 'headingMd', fontWeight: 'bold', color: 'text.base' })}>
                     Enhance your Spotlight Listing
                   </h2>
                   <p className={css({ textStyle: 'bodySm', color: 'text.alternate' })}>
