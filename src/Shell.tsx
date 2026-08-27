@@ -1570,9 +1570,41 @@ function ListingDetailScreen({
                 {listing.daysAgo.replace(' ago', ' on market')}
               </Tag>
             </div>
-            <h1 className={css({ textStyle: 'headingLg', fontWeight: 'bold', color: 'text.base' })}>
-              {listing.address1}, {listing.address2}
-            </h1>
+            <div
+              className={hstack({
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: '400',
+                w: '100%',
+                flexWrap: 'wrap',
+              })}
+            >
+              <h1 className={css({ textStyle: 'headingLg', fontWeight: 'bold', color: 'text.base' })}>
+                {listing.address1}, {listing.address2}
+              </h1>
+              {!listing.promoted &&
+                (canPromote(listing) ? (
+                  <Button
+                    styleType="Primary"
+                    size="lg"
+                    startIcon={<IconZap size={3} />}
+                    onClick={() => onPromote(listing)}
+                  >
+                    Promote Listing
+                  </Button>
+                ) : (
+                  <Tooltip
+                    placement="bottom"
+                    body={`Reach ${PROMOTE_MIN_COMPLETENESS}% listing completeness to promote this listing.`}
+                  >
+                    {/* Haven marks disabled buttons with aria-disabled rather than the
+                        native attribute, so hover and focus still reach the trigger. */}
+                    <Button styleType="Primary" size="lg" disabled>
+                      Unavailable
+                    </Button>
+                  </Tooltip>
+                ))}
+            </div>
             <div className={hstack({ gap: '300', alignItems: 'center' })}>
               <span className={css({ textStyle: 'bodyMd', color: 'text.alternate' })}>
                 {listing.price}
@@ -1623,20 +1655,21 @@ function ListingDetailScreen({
           </div>
         </Tabs.Content>
         <Tabs.Content value="details">
-          <div
-            className={css({
-              mt: '400',
-              bg: 'bg.base',
-              borderWidth: '100',
-              borderStyle: 'solid',
-              borderColor: 'border.base',
-              borderRadius: '300',
-              p: { base: '500', md: '800' },
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '400',
-            })}
-          >
+          <div className={vstack({ alignItems: 'stretch', gap: '600', mt: '400', w: '100%' })}>
+          {listing.promoted && (
+            <div
+              className={css({
+                bg: 'bg.base',
+                borderWidth: '100',
+                borderStyle: 'solid',
+                borderColor: 'border.base',
+                borderRadius: '300',
+                p: { base: '500', md: '800' },
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '400',
+              })}
+            >
             {listing.mediaEnhanced ? (
               <div className={vstack({ alignItems: 'flex-start', gap: '600', w: '100%' })}>
                 <div className={vstack({ alignItems: 'flex-start', gap: '200', w: '100%' })}>
@@ -1722,66 +1755,31 @@ function ListingDetailScreen({
                   w: '100%',
                 })}
               >
-                {listing.promoted ? (
-                  <>
-                    <div className={vstack({ alignItems: 'flex-start', gap: '300', flex: '1' })}>
-                      <h2 className={css({ textStyle: 'headingSm', color: 'text.base' })}>
-                        Enhance your Spotlight Listing
-                      </h2>
-                      <p className={css({ textStyle: 'bodySm', color: 'text.alternate' })}>
-                        Your Spotlight Listing is live. Add images and we'll transform your photos
-                        into immersive video and AI-enhanced media, giving buyers a fuller picture of
-                        the home and helping your listing stand out.
-                      </p>
-                    </div>
-                    <Button
-                      styleType="Primary"
-                      size="lg"
-                      startIcon={<IconSparklesSm size={3} />}
-                      onClick={() => onEnhance(listing)}
-                    >
-                      Enhance promotion
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <div className={vstack({ alignItems: 'flex-start', gap: '300', flex: '1' })}>
-                      <h2 className={css({ textStyle: 'headingSm', color: 'text.base' })}>
-                        Promote with Spotlight Listings
-                      </h2>
-                      <p className={css({ textStyle: 'bodySm', color: 'text.alternate' })}>
-                        Stand out with priority placement, now with AI-enhanced media to give buyers
-                        a richer way to explore the listing.
-                      </p>
-                    </div>
-                    {canPromote(listing) ? (
-                      <Button
-                        styleType="Primary"
-                        size="lg"
-                        startIcon={<IconZap size={3} />}
-                        onClick={() => onPromote(listing)}
-                      >
-                        Promote
-                      </Button>
-                    ) : (
-                      <Tooltip
-                        placement="bottom"
-                        body={`Reach ${PROMOTE_MIN_COMPLETENESS}% listing completeness to promote this listing.`}
-                      >
-                        {/* Haven marks disabled buttons with aria-disabled rather than the
-                            native attribute, so hover and focus still reach the trigger. */}
-                        <Button styleType="Primary" size="lg" disabled>
-                          Unavailable
-                        </Button>
-                      </Tooltip>
-                    )}
-                  </>
-                )}
+                <div className={vstack({ alignItems: 'flex-start', gap: '300', flex: '1' })}>
+                  <h2 className={css({ textStyle: 'headingSm', color: 'text.base' })}>
+                    Enhance your Spotlight Listing
+                  </h2>
+                  <p className={css({ textStyle: 'bodySm', color: 'text.alternate' })}>
+                    Your Spotlight Listing is live. Add images and we'll transform your photos into
+                    immersive video and AI-enhanced media, giving buyers a fuller picture of the
+                    home and helping your listing stand out.
+                  </p>
+                </div>
+                <Button
+                  styleType="Primary"
+                  size="lg"
+                  startIcon={<IconSparklesSm size={3} />}
+                  onClick={() => onEnhance(listing)}
+                >
+                  Enhance promotion
+                </Button>
               </div>
             )}
-          </div>
+            </div>
+          )}
 
           <ListingCompletenessCard listing={listing} />
+          </div>
         </Tabs.Content>
       </Tabs>
 
