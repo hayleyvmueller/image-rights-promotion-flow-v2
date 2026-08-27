@@ -71,6 +71,7 @@ import {
   IconHammer,
   IconCar,
   IconEdit,
+  IconCheck,
   LogoRealtorProDefault,
   LogoBrandWhite,
   LogoBrand,
@@ -331,6 +332,265 @@ const AVAILABLE_PROMOTIONS = 18
 const PROMOTE_MIN_COMPLETENESS = 75
 
 const canPromote = (listing: Listing) => listing.completeness >= PROMOTE_MIN_COMPLETENESS
+
+// ─── Listing completeness breakdown ──────────────────────────────────────────────
+
+interface CompletenessItem {
+  title: string
+  description: string
+}
+
+/**
+ * The fixed set of fields the completeness score is made up of. Listings only carry a
+ * single completeness percentage (no per-field data), so which of these read as
+ * "recommended" vs "completed" for a given listing is derived from that percentage
+ * rather than tracked individually — see `getCompletenessBreakdown`.
+ */
+const COMPLETENESS_ITEMS: CompletenessItem[] = [
+  {
+    title: 'Add at least 11 photos',
+    description:
+      'Listings that sell in your area and get more interest from potential buyers have at least 11 photos',
+  },
+  {
+    title: 'Add list price',
+    description:
+      'Listing prices are required when listing a property, 50% of potential buyers only filter and value price',
+  },
+  {
+    title: 'Add property type',
+    description:
+      'Property type is a required field, over 85% of daily searches of homes for sale start by filtering for property type',
+  },
+  {
+    title: 'Add number of full bedrooms',
+    description:
+      'Number of bedrooms is required, potential buyers express interest in it 280% more than other field',
+  },
+  {
+    title: 'Add number of full bathrooms',
+    description:
+      'Number of bathrooms is required, potential buyers express interest in it 240% more than other fields',
+  },
+  {
+    title: 'Add a description/property bio',
+    description: 'Assist in answering potential buyers early questions by providing details in the description',
+  },
+  {
+    title: 'Add square feet of living area',
+    description:
+      'Potential buyers value living area (sq ft) of the property 152% more than other property features',
+  },
+  {
+    title: 'Add garage type',
+    description: 'Does the listing have a garage? 12% of potential buyers value this feature the most',
+  },
+  {
+    title: 'How many garage spots are there?',
+    description: 'If the listing has a garage, please document the number of parking spaces',
+  },
+  {
+    title: 'Add number of stories (floors)',
+    description:
+      'Potential buyers express interest in the # of stories (floors/levels) 145% more than other property features',
+  },
+  {
+    title: 'What year was the property built?',
+    description:
+      'To ensure potential buyers are accurately filtering for this property, add in the year it was built',
+  },
+  {
+    title: 'Is there an HOA/Association Fee?',
+    description:
+      'About 16% of potential buyers place value on knowing the homeowner association (HOA) amount/fees',
+  },
+]
+
+/** Deterministically splits the fixed item list to match a listing's completeness %. */
+function getCompletenessBreakdown(completeness: number) {
+  const total = COMPLETENESS_ITEMS.length
+  const completedCount = Math.round((completeness / 100) * total)
+  return {
+    recommended: COMPLETENESS_ITEMS.slice(0, total - completedCount),
+    completed: COMPLETENESS_ITEMS.slice(total - completedCount),
+  }
+}
+
+function CompletenessItemRow({ item, complete }: { item: CompletenessItem; complete: boolean }) {
+  return (
+    <div
+      className={css({
+        borderWidth: '100',
+        borderStyle: 'solid',
+        borderColor: 'border.base',
+        borderRadius: '200',
+        p: '500',
+        w: '100%',
+      })}
+    >
+      <div
+        className={hstack({
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '400',
+          flexWrap: 'wrap',
+        })}
+      >
+        <span className={css({ textStyle: 'bodyMd', fontWeight: 'medium', color: 'text.base' })}>
+          {item.title}
+        </span>
+        {complete && (
+          <Tag dataColor="green" startIcon={<IconCheck size={2} />}>
+            Completed
+          </Tag>
+        )}
+      </div>
+      <p className={css({ textStyle: 'bodySm', color: 'text.alternate', mt: '200' })}>
+        {item.description}
+      </p>
+    </div>
+  )
+}
+
+function ListingCompletenessCard({ listing }: { listing: Listing }) {
+  const { recommended, completed } = getCompletenessBreakdown(listing.completeness)
+  const [recommendedOpen, setRecommendedOpen] = useState(true)
+  const [completedOpen, setCompletedOpen] = useState(false)
+
+  return (
+    <div
+      className={css({
+        mt: '600',
+        bg: 'bg.base',
+        borderWidth: '100',
+        borderStyle: 'solid',
+        borderColor: 'border.base',
+        borderRadius: '300',
+        p: { base: '500', md: '800' },
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '700',
+      })}
+    >
+      <div className={vstack({ alignItems: 'flex-start', gap: '600', w: '100%' })}>
+        <div
+          className={hstack({
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: '400',
+            w: '100%',
+            flexWrap: 'wrap',
+          })}
+        >
+          <h2 className={css({ textStyle: 'headingMd', fontWeight: 'bold', color: 'text.base' })}>
+            Listing completeness
+          </h2>
+          <Button styleType="Secondary" size="lg" endIcon={<IconOpen size={2} />}>
+            Go to MLS
+          </Button>
+        </div>
+        <p className={css({ textStyle: 'bodyLg', color: 'text.alternate' })}>
+          Complete the recommended actions to increase the attention your listing gets from
+          buyers.{' '}
+          <span className={css({ color: 'text.base', textDecoration: 'underline' })}>
+            How does this work?
+          </span>
+        </p>
+      </div>
+
+      <div className={vstack({ alignItems: 'flex-end', gap: '300', w: '100%' })}>
+        <ProgressBar
+          value={listing.completeness}
+          barColor={listing.completeness < PROMOTE_MIN_COMPLETENESS ? 'red' : 'green'}
+          size="lg"
+          aria-label="Listing completeness"
+          className={css({ w: '100%' })}
+        />
+        <div
+          className={hstack({
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            w: '100%',
+            gap: '300',
+          })}
+        >
+          <span className={css({ textStyle: 'bodyLg', fontWeight: 'medium', color: 'text.base' })}>
+            {listing.completeness}% complete
+          </span>
+          <span className={css({ textStyle: 'caption', color: 'text.alternate', whiteSpace: 'nowrap' })}>
+            Changes made in the MLS will take ~15 min to appear
+          </span>
+        </div>
+      </div>
+
+      {recommended.length > 0 && (
+        <>
+          <div className={css({ h: '1px', bg: 'border.base', w: '100%' })} />
+          <div className={vstack({ alignItems: 'flex-start', gap: '500', w: '100%' })}>
+            <button
+              type="button"
+              onClick={() => setRecommendedOpen((open) => !open)}
+              aria-expanded={recommendedOpen}
+              className={hstack({
+                gap: '300',
+                alignItems: 'center',
+                cursor: 'pointer',
+                bg: 'transparent',
+                border: 'none',
+                p: '0',
+              })}
+            >
+              <span className={css({ textStyle: 'headingSm', fontWeight: 'bold', color: 'text.base' })}>
+                Recommended ({recommended.length})
+              </span>
+              {recommendedOpen ? <IconChevronUp size={2} /> : <IconChevronDown size={2} />}
+            </button>
+            {recommendedOpen && (
+              <div className={vstack({ alignItems: 'stretch', gap: '400', w: '100%' })}>
+                {recommended.map((item) => (
+                  <CompletenessItemRow key={item.title} item={item} complete={false} />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {completed.length > 0 && (
+        <>
+          <div className={css({ h: '1px', bg: 'border.base', w: '100%' })} />
+          <div className={vstack({ alignItems: 'flex-start', gap: '500', w: '100%' })}>
+            <button
+              type="button"
+              onClick={() => setCompletedOpen((open) => !open)}
+              aria-expanded={completedOpen}
+              className={hstack({
+                gap: '300',
+                alignItems: 'center',
+                cursor: 'pointer',
+                bg: 'transparent',
+                border: 'none',
+                p: '0',
+              })}
+            >
+              <span className={css({ textStyle: 'headingSm', fontWeight: 'bold', color: 'text.base' })}>
+                Completed ({completed.length})
+              </span>
+              {completedOpen ? <IconChevronUp size={2} /> : <IconChevronDown size={2} />}
+            </button>
+            {completedOpen && (
+              <div className={vstack({ alignItems: 'stretch', gap: '400', w: '100%' })}>
+                {completed.map((item) => (
+                  <CompletenessItemRow key={item.title} item={item} complete />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 /** Agents get a fixed number of enhanced-media regenerations per listing. */
 const MAX_REGENERATIONS = 3
@@ -1520,6 +1780,8 @@ function ListingDetailScreen({
               </div>
             )}
           </div>
+
+          <ListingCompletenessCard listing={listing} />
         </Tabs.Content>
       </Tabs>
 
