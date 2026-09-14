@@ -72,6 +72,8 @@ import {
   IconCar,
   IconEdit,
   IconCheck,
+  IconTrendsUpSm,
+  IconTrendsDownSm,
   LogoRealtorProDefault,
   LogoBrandWhite,
   LogoBrand,
@@ -106,7 +108,6 @@ import RENDER_FARMHOUSE from './Image Renovated/Farmhouse.png'
 
 // ─── Sample data ──────────────────────────────────────────────────────────────
 
-type Performance = 'Above average' | 'Below average' | 'Average'
 type CompletenessColor = 'green' | 'yellow' | 'red'
 
 interface Listing {
@@ -120,16 +121,18 @@ interface Listing {
   phone: string
   listDate: string
   daysAgo: string
-  performance: Performance
   completeness: number
   completenessColor: CompletenessColor
+  /** How many times the listing has come up in a buyer search, this period. */
+  searchAppearances: number
+  /** Signed percent vs. similar listings' search appearances (e.g. -22, +12). */
+  searchAppearancesTrendPct: number
   promotionStatus: string
   promoted?: boolean
   mediaEnhanced?: boolean
   /** How many times the agent has regenerated enhanced media for this listing. */
   regenerationsUsed?: number
   uploadedPhotos: string[]
-  buyers: string
 }
 
 const LISTINGS: Listing[] = [
@@ -144,12 +147,12 @@ const LISTINGS: Listing[] = [
     phone: '(214) 555-0142',
     listDate: '02/02/25',
     daysAgo: '3 days ago',
-    performance: 'Above average',
     completeness: 90,
     completenessColor: 'green',
+    searchAppearances: 480,
+    searchAppearancesTrendPct: -22,
     promotionStatus: 'never promoted',
     uploadedPhotos: [],
-    buyers: '3 matches',
   },
   {
     id: '2',
@@ -162,12 +165,12 @@ const LISTINGS: Listing[] = [
     phone: '(512) 555-0187',
     listDate: '01/18/25',
     daysAgo: '17 days ago',
-    performance: 'Below average',
     completeness: 30,
     completenessColor: 'red',
+    searchAppearances: 340,
+    searchAppearancesTrendPct: -18,
     promotionStatus: 'ended 07/25/26',
     uploadedPhotos: [],
-    buyers: '11 matches',
   },
   {
     id: '3',
@@ -180,12 +183,12 @@ const LISTINGS: Listing[] = [
     phone: '(512) 555-0163',
     listDate: '01/18/25',
     daysAgo: '17 days ago',
-    performance: 'Average',
     completeness: 50,
     completenessColor: 'yellow',
+    searchAppearances: 260,
+    searchAppearancesTrendPct: -31,
     promotionStatus: 'ended 07/25/26',
     uploadedPhotos: [],
-    buyers: '32 matches',
   },
   {
     id: '4',
@@ -198,12 +201,12 @@ const LISTINGS: Listing[] = [
     phone: '(512) 555-0119',
     listDate: '01/16/25',
     daysAgo: '19 days ago',
-    performance: 'Above average',
     completeness: 92,
     completenessColor: 'green',
+    searchAppearances: 240,
+    searchAppearancesTrendPct: 12,
     promotionStatus: 'ended 07/25/26',
     uploadedPhotos: [],
-    buyers: '3 matches',
   },
   {
     id: '5',
@@ -216,12 +219,12 @@ const LISTINGS: Listing[] = [
     phone: '(512) 555-0104',
     listDate: '01/08/25',
     daysAgo: '27 days ago',
-    performance: 'Average',
     completeness: 72,
     completenessColor: 'green',
+    searchAppearances: 300,
+    searchAppearancesTrendPct: -5,
     promotionStatus: 'ended 07/25/26',
     uploadedPhotos: [],
-    buyers: '17 matches',
   },
   {
     id: '6',
@@ -234,13 +237,13 @@ const LISTINGS: Listing[] = [
     phone: '(512) 555-0176',
     listDate: '01/08/25',
     daysAgo: '27 days ago',
-    performance: 'Above average',
     completeness: 88,
     completenessColor: 'green',
+    searchAppearances: 410,
+    searchAppearancesTrendPct: 8,
     promotionStatus: 'Promoted',
     promoted: true,
     uploadedPhotos: [],
-    buyers: '24 matches',
   },
   {
     id: '7',
@@ -253,12 +256,12 @@ const LISTINGS: Listing[] = [
     phone: '(214) 555-0198',
     listDate: '01/05/25',
     daysAgo: '30 days ago',
-    performance: 'Below average',
     completeness: 45,
     completenessColor: 'red',
+    searchAppearances: 150,
+    searchAppearancesTrendPct: -27,
     promotionStatus: 'never promoted',
     uploadedPhotos: [],
-    buyers: '8 matches',
   },
   {
     id: '8',
@@ -271,12 +274,12 @@ const LISTINGS: Listing[] = [
     phone: '(512) 555-0155',
     listDate: '12/29/24',
     daysAgo: '37 days ago',
-    performance: 'Average',
     completeness: 64,
     completenessColor: 'yellow',
+    searchAppearances: 290,
+    searchAppearancesTrendPct: -3,
     promotionStatus: 'ended 06/14/26',
     uploadedPhotos: [],
-    buyers: '19 matches',
   },
   {
     id: '9',
@@ -289,13 +292,13 @@ const LISTINGS: Listing[] = [
     phone: '(214) 555-0133',
     listDate: '12/22/24',
     daysAgo: '44 days ago',
-    performance: 'Above average',
     completeness: 96,
     completenessColor: 'green',
+    searchAppearances: 520,
+    searchAppearancesTrendPct: 15,
     promotionStatus: 'Promoted',
     promoted: true,
     uploadedPhotos: [],
-    buyers: '41 matches',
   },
   {
     id: '10',
@@ -308,23 +311,16 @@ const LISTINGS: Listing[] = [
     phone: '(512) 555-0121',
     listDate: '12/18/24',
     daysAgo: '48 days ago',
-    performance: 'Average',
     completeness: 58,
     completenessColor: 'yellow',
+    searchAppearances: 190,
+    searchAppearancesTrendPct: -9,
     promotionStatus: 'never promoted',
     uploadedPhotos: [],
-    buyers: '6 matches',
   },
 ]
 
-// Performance badge → Tag color
-const PERFORMANCE_COLOR: Record<Performance, 'greenSubtle' | 'redSubtle' | 'graySubtle'> = {
-  'Above average': 'greenSubtle',
-  'Below average': 'redSubtle',
-  'Average': 'graySubtle',
-}
-
-const SEGMENTS = ['For sale', 'For rent', 'Sold', 'ListHub']
+const SEGMENTS = ['For sale', 'For rent', 'Sold']
 
 const AVAILABLE_PROMOTIONS = 18
 
@@ -917,14 +913,25 @@ const DOT_VAR: Record<CompletenessColor, string> = {
   red: 'var(--colors-status-error)',
 }
 
-function Completeness({ value, color }: { value: number; color: CompletenessColor }) {
+function Completeness({
+  value,
+  color,
+  showLabel,
+}: {
+  value: number
+  color: CompletenessColor
+  /** Appends " complete" to the percentage, matching the All Listings table. */
+  showLabel?: boolean
+}) {
   return (
     <span className={hstack({ gap: '200', alignItems: 'center' })}>
       <span
         className={css({ w: '8px', h: '8px', borderRadius: '500', flexShrink: 0 })}
         style={{ backgroundColor: DOT_VAR[color] }}
       />
-      <span className={css({ textStyle: 'bodySm', color: 'text.base' })}>{value}%</span>
+      <span className={css({ textStyle: 'bodySm', color: 'text.base' })}>
+        {value}%{showLabel ? ' complete' : ''}
+      </span>
     </span>
   )
 }
@@ -1057,10 +1064,21 @@ function AllListingsScreen({
               <Table.Cell as="th"><SortableHeader label="Property" /></Table.Cell>
               <Table.Cell as="th"><SortableHeader label="Agent" /></Table.Cell>
               <Table.Cell as="th"><SortableHeader label="List date" /></Table.Cell>
-              <Table.Cell as="th">Performance</Table.Cell>
-              <Table.Cell as="th">Completeness</Table.Cell>
-              <Table.Cell as="th">Promotion</Table.Cell>
-              <Table.Cell as="th">Buyers</Table.Cell>
+              <Table.Cell as="th">Promotion status</Table.Cell>
+              <Table.Cell as="th">
+                <span className={hstack({ gap: '200', alignItems: 'center' })}>
+                  <span>Completeness</span>
+                  <Tooltip
+                    placement="top"
+                    body="Complete the recommended actions to increase the attention your listing gets from buyers."
+                  >
+                    <span className={css({ color: 'text.alternate', display: 'inline-flex' })}>
+                      <IconInfo size={2} />
+                    </span>
+                  </Tooltip>
+                </span>
+              </Table.Cell>
+              <Table.Cell as="th"><SortableHeader label="Search appearances" /></Table.Cell>
             </Table.Row>
           </Table.Header>
           <Table.Body>
@@ -1140,22 +1158,7 @@ function AllListingsScreen({
                   </div>
                 </Table.Cell>
 
-                {/* Performance */}
-                <Table.Cell>
-                  <Tag
-                    dataColor={PERFORMANCE_COLOR[l.performance]}
-                    className={css({ whiteSpace: 'nowrap' })}
-                  >
-                    {l.performance}
-                  </Tag>
-                </Table.Cell>
-
-                {/* Completeness */}
-                <Table.Cell>
-                  <Completeness value={l.completeness} color={l.completenessColor} />
-                </Table.Cell>
-
-                {/* Promotion */}
+                {/* Promotion status */}
                 <Table.Cell>
                   {l.promoted ? (
                     <div className={vstack({ alignItems: 'flex-start', gap: '200' })}>
@@ -1196,21 +1199,50 @@ function AllListingsScreen({
                       body={`Reach ${PROMOTE_MIN_COMPLETENESS}% listing completeness to promote this listing.`}
                     >
                       <span
-                        className={css({
-                          textStyle: 'bodySm',
-                          fontWeight: 'medium',
-                          color: 'text.disabled',
-                        })}
+                        className={hstack({ gap: '100', alignItems: 'center', cursor: 'default' })}
                       >
-                        Unavailable
+                        <span
+                          className={css({
+                            textStyle: 'bodySm',
+                            fontWeight: 'medium',
+                            color: 'text.disabled',
+                          })}
+                        >
+                          Action needed
+                        </span>
+                        <span className={css({ color: 'text.disabled', display: 'inline-flex' })}>
+                          <IconInfo size={2} />
+                        </span>
                       </span>
                     </Tooltip>
                   )}
                 </Table.Cell>
 
-                {/* Buyers */}
+                {/* Completeness */}
                 <Table.Cell>
-                  <span className={css({ textStyle: 'bodySm', color: 'text.base' })}>{l.buyers}</span>
+                  <Completeness value={l.completeness} color={l.completenessColor} showLabel />
+                </Table.Cell>
+
+                {/* Search appearances */}
+                <Table.Cell>
+                  <div className={vstack({ alignItems: 'flex-start', gap: '200' })}>
+                    <span className={css({ textStyle: 'bodySm', fontWeight: 'medium', color: 'text.base' })}>
+                      {l.searchAppearances}
+                    </span>
+                    <Tag
+                      dataColor={l.searchAppearancesTrendPct >= 0 ? 'greenSubtle' : 'redSubtle'}
+                      startIcon={
+                        l.searchAppearancesTrendPct >= 0 ? (
+                          <IconTrendsUpSm size={2} />
+                        ) : (
+                          <IconTrendsDownSm size={2} />
+                        )
+                      }
+                      className={css({ whiteSpace: 'nowrap' })}
+                    >
+                      {Math.abs(l.searchAppearancesTrendPct)}% vs. similar
+                    </Tag>
+                  </div>
                 </Table.Cell>
               </Table.Row>
             ))}

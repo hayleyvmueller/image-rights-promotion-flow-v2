@@ -2809,10 +2809,6 @@
     margin-top: var(--spacing-200);
 }
 
-  .mt_600 {
-    margin-top: var(--spacing-600);
-}
-
   .h_1px {
     height: 1px;
 }
@@ -3059,6 +3055,10 @@
 
   .mb_600 {
     margin-bottom: var(--spacing-600);
+}
+
+  .mt_600 {
+    margin-top: var(--spacing-600);
 }
 
   .w_\[83\.33\%\] {
