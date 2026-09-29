@@ -1932,6 +1932,10 @@
     flex-wrap: wrap;
 }
 
+  .cursor_default {
+    cursor: default;
+}
+
   .jc_flex-end {
     justify-content: flex-end;
 }
@@ -2378,10 +2382,6 @@
 
   .c_status\.error {
     color: var(--colors-status-error);
-}
-
-  .cursor_default {
-    cursor: default;
 }
 
   .clip_rect\(0\,_0\,_0\,_0\) {

@@ -29,7 +29,10 @@ import {
   IconHome,
   IconUsers,
   IconContact,
-  IconListingStatus,
+  IconListingStatusFilled,
+  IconReferrals,
+  IconPerformance,
+  IconMoneyStack,
   IconNotifications,
   IconZap,
   IconFilter,
@@ -743,7 +746,7 @@ function TopBar({ onMenuClick }: { onMenuClick?: () => void } = {}) {
 
 // ─── Sidebar ────────────────────────────────────────────────────────────────────
 
-type SidebarPage = 'dashboard' | 'all-listings' | 'spotlight-listings'
+type SidebarPage = 'dashboard' | 'all-listings'
 
 function SidebarNav({
   activePage,
@@ -752,8 +755,6 @@ function SidebarNav({
   activePage: SidebarPage
   onNavigate: (page: SidebarPage) => void
 }) {
-  const [listingsOpen, setListingsOpen] = useState(true)
-
   return (
     <SideNavigation className={css({ py: '500' })}>
       <SideNavigationItem
@@ -772,7 +773,7 @@ function SidebarNav({
           id: 'team',
           topLevel: true,
           isParent: true,
-          startIcon: <IconUsers size={3} />,
+          startIcon: <IconReferrals size={3} />,
           linkText: 'Team',
           listId: 'team-group',
           show: false,
@@ -797,33 +798,45 @@ function SidebarNav({
         <SideNavigationItem id="leads-all" linkText="All leads" />
       </SideNavigationGroup>
 
+      <SideNavigationItem
+        id="listings"
+        topLevel
+        startIcon={<IconListingStatusFilled size={3} />}
+        linkText="Listings"
+        active={activePage === 'all-listings'}
+        onLinkClick={() => onNavigate('all-listings')}
+      />
+
       <SideNavigationGroup
-        id="listings-group"
-        show={listingsOpen}
+        id="reporting-group"
+        show={false}
         itemProps={{
-          id: 'listings',
+          id: 'reporting',
           topLevel: true,
           isParent: true,
-          startIcon: <IconListingStatus size={3} />,
-          linkText: 'Listings',
-          listId: 'listings-group',
-          show: listingsOpen,
-          onArrowClick: () => setListingsOpen((o) => !o),
-          onLinkClick: () => setListingsOpen((o) => !o),
+          startIcon: <IconPerformance size={3} />,
+          linkText: 'Reporting',
+          listId: 'reporting-group',
+          show: false,
         }}
       >
-        <SideNavigationItem
-          id="all-listings"
-          linkText="All listings"
-          active={activePage === 'all-listings'}
-          onLinkClick={() => onNavigate('all-listings')}
-        />
-        <SideNavigationItem
-          id="spotlight-listings"
-          linkText="Spotlight listings"
-          active={activePage === 'spotlight-listings'}
-          onLinkClick={() => onNavigate('spotlight-listings')}
-        />
+        <SideNavigationItem id="reporting-sub" linkText="Sub nav item" />
+      </SideNavigationGroup>
+
+      <SideNavigationGroup
+        id="billing-group"
+        show={false}
+        itemProps={{
+          id: 'billing',
+          topLevel: true,
+          isParent: true,
+          startIcon: <IconMoneyStack size={3} />,
+          linkText: 'Billing',
+          listId: 'billing-group',
+          show: false,
+        }}
+      >
+        <SideNavigationItem id="billing-sub" linkText="Sub nav item" />
       </SideNavigationGroup>
     </SideNavigation>
   )
