@@ -337,82 +337,112 @@ const canPromote = (listing: Listing) => listing.completeness >= PROMOTE_MIN_COM
 interface CompletenessItem {
   title: string
   description: string
+  /** How many points toward 100% this field is worth, per the scoring reference. */
+  liftPct: number
 }
 
 /**
- * The fixed set of fields the completeness score is made up of. Listings only carry a
- * single completeness percentage (no per-field data), so which of these read as
- * "recommended" vs "completed" for a given listing is derived from that percentage
- * rather than tracked individually — see `getCompletenessBreakdown`.
+ * The fixed set of fields the completeness score is made up of, with each one's real
+ * weight toward the total. Listings only carry a single completeness percentage (no
+ * per-field data), so which of these read as "recommended" vs "completed" for a given
+ * listing is derived from that percentage rather than tracked individually — see
+ * `getCompletenessBreakdown`. Photos is always treated as done: an agent who's already
+ * uploaded the required photos shouldn't see it come back as a recommendation.
  */
 const COMPLETENESS_ITEMS: CompletenessItem[] = [
   {
     title: 'Add at least 11 photos',
     description:
       'Listings that sell in your area and get more interest from potential buyers have at least 11 photos',
+    liftPct: 43.8,
   },
   {
     title: 'Add list price',
     description:
       'Listing prices are required when listing a property, 50% of potential buyers only filter and value price',
+    liftPct: 7.3,
   },
   {
     title: 'Add property type',
     description:
       'Property type is a required field, over 85% of daily searches of homes for sale start by filtering for property type',
+    liftPct: 7.3,
   },
   {
     title: 'Add number of full bedrooms',
     description:
       'Number of bedrooms is required, potential buyers express interest in it 280% more than other field',
+    liftPct: 7.3,
   },
   {
     title: 'Add number of full bathrooms',
     description:
       'Number of bathrooms is required, potential buyers express interest in it 240% more than other fields',
+    liftPct: 7.3,
   },
   {
     title: 'Add a description/property bio',
     description: 'Assist in answering potential buyers early questions by providing details in the description',
+    liftPct: 7.3,
   },
   {
     title: 'Add square feet of living area',
     description:
       'Potential buyers value living area (sq ft) of the property 152% more than other property features',
+    liftPct: 7.3,
   },
   {
     title: 'Add garage type',
     description: 'Does the listing have a garage? 12% of potential buyers value this feature the most',
+    liftPct: 3.6,
   },
   {
     title: 'How many garage spots are there?',
     description: 'If the listing has a garage, please document the number of parking spaces',
+    liftPct: 3.6,
   },
   {
     title: 'Add number of stories (floors)',
     description:
       'Potential buyers express interest in the # of stories (floors/levels) 145% more than other property features',
+    liftPct: 3.6,
   },
   {
     title: 'What year was the property built?',
     description:
       'To ensure potential buyers are accurately filtering for this property, add in the year it was built',
+    liftPct: 2.9,
   },
   {
     title: 'Is there an HOA/Association Fee?',
     description:
       'About 16% of potential buyers place value on knowing the homeowner association (HOA) amount/fees',
+    liftPct: 2.9,
   },
 ]
 
-/** Deterministically splits the fixed item list to match a listing's completeness %. */
+/**
+ * Splits the fixed item list to match a listing's completeness %, using each item's real
+ * weight. Photos (the heaviest item) is always marked done; walking the rest in order,
+ * an item counts as done as long as adding its weight doesn't push the running total
+ * past the listing's actual score — everything after that point reads as recommended.
+ */
 function getCompletenessBreakdown(completeness: number) {
-  const total = COMPLETENESS_ITEMS.length
-  const completedCount = Math.round((completeness / 100) * total)
-  return {
-    recommended: COMPLETENESS_ITEMS.slice(0, total - completedCount),
-    completed: COMPLETENESS_ITEMS.slice(total - completedCount),
+  const [photos, ...rest] = COMPLETENESS_ITEMS
+  const completed = [photos]
+  const recommended: CompletenessItem[] = []
+  let runningTotal = photos.liftPct
+
+  for (const item of rest) {
+    if (runningTotal + item.liftPct <= completeness) {
+      completed.push(item)
+      runningTotal += item.liftPct
+    } else {
+      recommended.push(item)
+    }
   }
+
+  return { recommended, completed }
 }
 
 function CompletenessItemRow({ item, complete }: { item: CompletenessItem; complete: boolean }) {
@@ -438,10 +468,12 @@ function CompletenessItemRow({ item, complete }: { item: CompletenessItem; compl
         <span className={css({ textStyle: 'bodyMd', fontWeight: 'medium', color: 'text.base' })}>
           {item.title}
         </span>
-        {complete && (
+        {complete ? (
           <Tag dataColor="green" startIcon={<IconCheck size={2} />}>
             Completed
           </Tag>
+        ) : (
+          <Tag dataColor="graySubtle">+{item.liftPct}%</Tag>
         )}
       </div>
       <p className={css({ textStyle: 'bodySm', color: 'text.alternate', mt: '200' })}>
