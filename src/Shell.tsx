@@ -422,24 +422,87 @@ const COMPLETENESS_ITEMS: CompletenessItem[] = [
 ]
 
 /**
+ * "Core" MLS fields a real listing feed has essentially always filled in already —
+ * recommending one of these is a last resort, only reached for when the smaller detail
+ * fields alone can't get close to the actual gap.
+ */
+const CORE_FIELD_TITLES = new Set([
+  'Add list price',
+  'Add property type',
+  'Add number of full bedrooms',
+  'Add number of full bathrooms',
+  'Add a description/property bio',
+  'Add square feet of living area',
+])
+/** In tenths of a percentage point — big enough that detail fields win on any close call. */
+const CORE_FIELD_PENALTY = 30
+
+/**
+ * Search order for `getCompletenessBreakdown`: detail fields first (garage spots and
+ * stories ahead of garage type, so a tie between equally-weighted detail fields favors
+ * them), core fields last. Independent of `COMPLETENESS_ITEMS`, which stays in the
+ * reference's own order for display.
+ */
+const COMPLETENESS_SEARCH_ORDER = [
+  'How many garage spots are there?',
+  'Add number of stories (floors)',
+  'What year was the property built?',
+  'Is there an HOA/Association Fee?',
+  'Add garage type',
+  'Add list price',
+  'Add property type',
+  'Add number of full bedrooms',
+  'Add number of full bathrooms',
+  'Add a description/property bio',
+  'Add square feet of living area',
+].map((title) => COMPLETENESS_ITEMS.find((item) => item.title === title)!)
+
+/**
  * Splits the fixed item list to match a listing's completeness %, using each item's real
- * weight. Photos (the heaviest item) is always marked done; walking the rest in order,
- * an item counts as done as long as adding its weight doesn't push the running total
- * past the listing's actual score — everything after that point reads as recommended.
+ * weight. Photos (the heaviest item) is always marked done, so an agent who's already
+ * uploaded the required photos never sees it come back as a recommendation. From the
+ * rest, this picks whichever combination lands closest to exactly filling the gap to
+ * 100% — so working through every recommended action takes the listing to (as close as
+ * possible to) 100%, rather than past it — while favoring detail fields (garage, stories,
+ * year built, HOA) over core MLS fields that are unrealistic to ever be missing. The
+ * individual item weights sum to just over 100% on their own, so without the closest-fit
+ * step, "everything left over" would routinely overshoot.
  */
 function getCompletenessBreakdown(completeness: number) {
-  const [photos, ...rest] = COMPLETENESS_ITEMS
-  const completed = [photos]
-  const recommended: CompletenessItem[] = []
-  let runningTotal = photos.liftPct
+  const target = Math.round((100 - completeness) * 10)
+  const weights = COMPLETENESS_SEARCH_ORDER.map((item) => Math.round(item.liftPct * 10))
 
-  for (const item of rest) {
-    if (runningTotal + item.liftPct <= completeness) {
-      completed.push(item)
-      runningTotal += item.liftPct
-    } else {
-      recommended.push(item)
+  let bestMask = 0
+  let bestScore = Infinity
+  let bestCount = Infinity
+  for (let mask = 0; mask < 1 << COMPLETENESS_SEARCH_ORDER.length; mask++) {
+    let sum = 0
+    let count = 0
+    let penalty = 0
+    for (let i = 0; i < COMPLETENESS_SEARCH_ORDER.length; i++) {
+      if (mask & (1 << i)) {
+        sum += weights[i]
+        count++
+        if (CORE_FIELD_TITLES.has(COMPLETENESS_SEARCH_ORDER[i].title)) penalty += CORE_FIELD_PENALTY
+      }
     }
+    const score = Math.abs(sum - target) + penalty
+    if (score < bestScore || (score === bestScore && count < bestCount)) {
+      bestScore = score
+      bestCount = count
+      bestMask = mask
+    }
+  }
+
+  const recommendedTitles = new Set(
+    COMPLETENESS_SEARCH_ORDER.filter((_, i) => bestMask & (1 << i)).map((item) => item.title)
+  )
+
+  const recommended: CompletenessItem[] = []
+  const completed: CompletenessItem[] = []
+  for (const item of COMPLETENESS_ITEMS) {
+    if (recommendedTitles.has(item.title)) recommended.push(item)
+    else completed.push(item)
   }
 
   return { recommended, completed }
@@ -4416,18 +4479,9 @@ function BeforeAfterSlider({
 }
 
 function ConsumerLdpScreen({ listing, onBack }: { listing: Listing; onBack: () => void }) {
-  // Fall back to the listing's own hero shot so the page still renders if it is
-  // reached before any photos were uploaded.
-  const heroPhotos = listing.uploadedPhotos.length > 0 ? listing.uploadedPhotos : [listing.photo]
-  // The main spot opens on the generated walkthrough video; the agent's photos
-  // sit behind it in the same carousel.
-  const heroMedia: { kind: 'video' | 'photo'; src: string }[] = [
-    { kind: 'video', src: WALKTHROUGH_VIDEO_URL },
-    ...heroPhotos.map((src) => ({ kind: 'photo' as const, src })),
-  ]
-  const [heroIndex, setHeroIndex] = useState(0)
+  // The main spot is locked to the generated walkthrough video — no arrows to click
+  // through to the agent's photos, so there's nothing else for `playing` to track.
   const [playing, setPlaying] = useState(true)
-  const heroItem = heroMedia[heroIndex]
   const heroVideoRef = useRef<HTMLVideoElement>(null)
   // Picking a tile only stages a choice — `selectedStyleIndex`. Nothing renders
   // until Renovate is pressed, at which point `generating` holds the in-flight
@@ -4439,19 +4493,6 @@ function ConsumerLdpScreen({ listing, onBack }: { listing: Listing; onBack: () =
   const [descExpanded, setDescExpanded] = useState(false)
   const isDesktop = useMediaQuery('(min-width: 1024px)')
 
-  // Photos advance on their own until the buyer pauses. The video is left alone
-  // — it loops for as long as the buyer wants to watch it.
-  useEffect(() => {
-    if (!playing || heroItem.kind === 'video' || heroMedia.length < 2) return
-    const id = window.setInterval(
-      () => setHeroIndex((i) => (i + 1) % heroMedia.length),
-      3500
-    )
-    return () => window.clearInterval(id)
-  }, [playing, heroItem.kind, heroMedia.length])
-
-  // One play/pause control drives both media types, so the video has to follow
-  // `playing` rather than just its own autoplay attribute.
   useEffect(() => {
     const video = heroVideoRef.current
     if (!video) return
@@ -4461,12 +4502,7 @@ function ConsumerLdpScreen({ listing, onBack }: { listing: Listing; onBack: () =
     } else {
       video.pause()
     }
-  }, [playing, heroIndex])
-
-  const step = (delta: number) => {
-    setPlaying(false)
-    setHeroIndex((i) => (i + delta + heroMedia.length) % heroMedia.length)
-  }
+  }, [playing])
 
   // Stand-in for the render round trip.
   useEffect(() => {
@@ -4553,25 +4589,17 @@ function ConsumerLdpScreen({ listing, onBack }: { listing: Listing; onBack: () =
             bg: 'bg.alternate',
           })}
         >
-          {heroItem.kind === 'video' ? (
-            <video
-              ref={heroVideoRef}
-              src={heroItem.src}
-              // Muted and inline is what lets the walkthrough start by itself —
-              // browsers block autoplay that would make noise.
-              autoPlay
-              muted
-              loop
-              playsInline
-              className={css({ w: '100%', h: '100%', objectFit: 'cover', display: 'block' })}
-            />
-          ) : (
-            <img
-              src={heroItem.src}
-              alt=""
-              className={css({ w: '100%', h: '100%', objectFit: 'cover', display: 'block' })}
-            />
-          )}
+          <video
+            ref={heroVideoRef}
+            src={WALKTHROUGH_VIDEO_URL}
+            // Muted and inline is what lets the walkthrough start by itself —
+            // browsers block autoplay that would make noise.
+            autoPlay
+            muted
+            loop
+            playsInline
+            className={css({ w: '100%', h: '100%', objectFit: 'cover', display: 'block' })}
+          />
 
           <div className={css({ position: 'absolute', top: '500', left: '500' })}>
             <Tag dataColor="blue" startIcon={<IconZap size={2} />}>
@@ -4579,35 +4607,16 @@ function ConsumerLdpScreen({ listing, onBack }: { listing: Listing; onBack: () =
             </Tag>
           </div>
 
-          <MediaCounter>
-            {heroIndex + 1}/{totalMedia}
-          </MediaCounter>
+          <MediaCounter>1/{totalMedia}</MediaCounter>
 
-          {heroMedia.length > 1 && (
-            <>
-              <MediaControl
-                label="Previous photo"
-                onClick={() => step(-1)}
-                css={{ left: '500', top: '50%', transform: 'translateY(-50%)' }}
-              >
-                <IconChevronLeft size={3} />
-              </MediaControl>
-              <MediaControl
-                label="Next photo"
-                onClick={() => step(1)}
-                css={{ right: '500', top: '50%', transform: 'translateY(-50%)' }}
-              >
-                <IconChevronRight size={3} />
-              </MediaControl>
-              <MediaControl
-                label={playing ? 'Pause walkthrough' : 'Play walkthrough'}
-                onClick={() => setPlaying((p) => !p)}
-                css={{ bottom: '500', left: '50%', transform: 'translateX(-50%)' }}
-              >
-                {playing ? <IconPauseFilled size={3} /> : <IconPlay size={3} />}
-              </MediaControl>
-            </>
-          )}
+          {/* No prev/next arrows — the hero is locked to the walkthrough video. */}
+          <MediaControl
+            label={playing ? 'Pause walkthrough' : 'Play walkthrough'}
+            onClick={() => setPlaying((p) => !p)}
+            css={{ bottom: '500', left: '50%', transform: 'translateX(-50%)' }}
+          >
+            {playing ? <IconPauseFilled size={3} /> : <IconPlay size={3} />}
+          </MediaControl>
 
           <p
             className={css({
